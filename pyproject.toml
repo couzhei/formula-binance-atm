@@ -1,0 +1,13 @@
+[project]
+name = "formula-binance-atm"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "black>=24.10.0",
+    "fastapi[standard]>=0.115.6",
+    "flake8>=7.1.1",
+    "pandas[standard]>=2.2.3",
+    "pylint>=3.3.3",
+]

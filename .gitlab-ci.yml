@@ -1,0 +1,33 @@
+stages:
+  - build
+  - test
+  - deploy
+
+variables:
+  VENV_PATH: ".venv"
+
+# Use an image that includes Python 3.10
+image: python:3.10
+
+before_script:
+  - python -m venv $VENV_PATH
+  - source $VENV_PATH/bin/activate
+  - pip install --no-cache-dir -r requirements.dev.txt
+
+build:
+  stage: build
+  script:
+    - echo "Building the application..."
+    - python -m compileall .
+
+test:
+  stage: test
+  script:
+    - echo "Running tests..."
+    - pytest tests/
+
+deploy:
+  stage: deploy
+  script:
+    - echo "Deploying the application..."
+    # Add your deployment script/commands here
