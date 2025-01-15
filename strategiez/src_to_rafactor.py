@@ -1,7 +1,9 @@
 import pandas as pd
 
-def calculate_indicator_signals(df: pd.DataFrame, indicator_name, variables, detect_divergence=False):
 
+def calculate_indicator_signals(
+    df: pd.DataFrame, indicator_name, variables, detect_divergence=False
+):
     """
     Calculate indicator signals for a given financial data and indicator type.
 
@@ -24,8 +26,8 @@ def calculate_indicator_signals(df: pd.DataFrame, indicator_name, variables, det
         slow_length = variables.get("slow_length", 26)
         signal_length = variables.get("signal_length", 9)
 
-        df["EMA_fast"] = df["Close"].ewm(span=fast_length, adjust=False).mean()
-        df["EMA_slow"] = df["Close"].ewm(span=slow_length, adjust=False).mean()
+        df["EMA_fast"] = df["close"].ewm(span=fast_length, adjust=False).mean()
+        df["EMA_slow"] = df["close"].ewm(span=slow_length, adjust=False).mean()
         df["MACD_line"] = df["EMA_fast"] - df["EMA_slow"]
         df["MACD_signal"] = df["MACD_line"].ewm(span=signal_length, adjust=False).mean()
         df["MACD_hist"] = df["MACD_line"] - df["MACD_signal"]
@@ -40,8 +42,11 @@ def calculate_indicator_signals(df: pd.DataFrame, indicator_name, variables, det
                 signals["side"] = "SELL"
 
     elif indicator_name == "RSI":
+
         length = variables.get("length", 14)
-        delta = df["Close"].diff()
+        delta = df["close"].diff()
+        print("We're okay")
+
         gain = (delta.where(delta > 0, 0)).rolling(window=length).mean()
         loss = (-delta.where(delta < 0, 0)).rolling(window=length).mean()
         rs = gain / loss
@@ -58,7 +63,10 @@ def calculate_indicator_signals(df: pd.DataFrame, indicator_name, variables, det
 
     return df, signals
 
+
 def generate_signals(df):
+    # Ensure datetime is in Unix time format
+    df["datetime"] = pd.to_datetime(df["timestamp"]).astype(int) // 10**9
     buy_signals = []
     sell_signals = []
 
@@ -70,13 +78,18 @@ def generate_signals(df):
 
         if rsi_value is not None and macd_hist is not None:
             if rsi_value < 30 and macd_hist > 0:
-                buy_signals.append((df["Date"].iloc[i], df["Close"].iloc[i], "BUY"))
+                buy_signals.append((df["datetime"].iloc[i], df["close"].iloc[i], "BUY"))
             elif rsi_value > 70 and macd_hist < 0:
-                sell_signals.append((df["Date"].iloc[i], df["Close"].iloc[i], "SELL"))
+                sell_signals.append(
+                    (df["datetime"].iloc[i], df["close"].iloc[i], "SELL")
+                )
 
     return buy_signals, sell_signals
 
+
 def backtest_signals(df, buy_signals, sell_signals, initial_balance=10000):
+    # Ensure datetime is in Unix time format
+    df["datetime"] = pd.to_datetime(df["datetime"]).astype(int) // 10**9
     balance = initial_balance
     position = None
 
@@ -90,7 +103,7 @@ def backtest_signals(df, buy_signals, sell_signals, initial_balance=10000):
             position = None
 
     if position is not None:
-        last_price = df["Close"].iloc[-1]
+        last_price = df["close"].iloc[-1]
         buy_price, _ = position
         balance += last_price - buy_price
 

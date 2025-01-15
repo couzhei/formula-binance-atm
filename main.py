@@ -4,16 +4,20 @@ from datetime import datetime
 from random import uniform
 
 import pandas as pd
+from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
+from binance_api import get_binance_candles, get_historical_klines
 from strategiez.src_to_rafactor import (
     backtest_signals,
     calculate_indicator_signals,
     generate_signals,
 )
+
+load_dotenv()
 
 app = FastAPI()
 
@@ -48,13 +52,13 @@ class BacktestRequest(BaseModel):
     initial_balance: float = 10000.0
 
 
-@app.get("/historical_data_with_signals")
-def get_historical_data_with_signals():
+@app.get("/historical_data")
+def get_historical_data():
     try:
-        df = pd.read_csv(HISTORICAL_DATA_PATH)
-        # Convert 'Date' to a standard format if necessary
-        df["Date"] = pd.to_datetime(df["Date"]).dt.strftime("%Y-%m-%d")
-        df = df.sort_values(by="Date", ascending=True)
+
+        df = get_historical_klines(interval="1m", limit=50)
+
+        df = df.sort_values(by="timestamp", ascending=True)
 
         # Calculate indicators and generate signals
         df, macd_signals = calculate_indicator_signals(
@@ -68,7 +72,9 @@ def get_historical_data_with_signals():
         )
         buy_signals, sell_signals = generate_signals(df)
 
-        df = df.select_dtypes(include=["float64"]).astype(str).combine_first(df)
+        df = (
+            df.select_dtypes(include=["float64", "int64"]).astype(str).combine_first(df)
+        )
 
         return {
             "historical_data": df.to_dict(orient="records"),
@@ -83,6 +89,9 @@ def get_historical_data_with_signals():
 @app.post("/calculate")
 def calculate(req: CalculateRequest):
     df = pd.DataFrame(req.price_data)
+
+    # Ensure datetime is in Unix time format
+    df["datetime"] = pd.to_datetime(df["datetime"]).astype(int) // 10**9
 
     df, signals = calculate_indicator_signals(
         df, req.indicator_name, req.variables, req.detect_divergence
@@ -99,42 +108,24 @@ def calculate(req: CalculateRequest):
 @app.websocket("/ws/data")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
-    print("WebSocket connection accepted")
     try:
-        # Read the last price from historical data
-        df = pd.read_csv(HISTORICAL_DATA_PATH)
-        df["Date"] = pd.to_datetime(df["Date"])
-        df.sort_values(by="Date", ascending=True, inplace=True)
-        last_row = df.iloc[-1]
-        last_price = float(last_row["Close"])
-        current_date = pd.to_datetime(last_row["Date"])  # Convert to datetime
-
-        while True:
-            # Generate random price movements (within ±2% of last price)
-            price_range = last_price * 0.02
-            open_price = last_price + uniform(-price_range, price_range)
-            high_price = open_price + uniform(0, price_range)
-            low_price = open_price - uniform(0, price_range)
-            close_price = uniform(low_price, high_price)
-
-            # Update last price for next iteration
-            last_price = close_price
-
-            # Increment date by one day and format it
-            current_date = current_date + pd.Timedelta(days=1)
-
+        async for candle in get_binance_candles(
+            symbol="btcusdt",
+            interval="1m",
+        ):
             real_time_data = {
-                "time": current_date.strftime("%Y-%m-%d"),
-                "open": round(open_price, 2),
-                "high": round(high_price, 2),
-                "low": round(low_price, 2),
-                "close": round(close_price, 2),
-                "signal": "BUY" if uniform(0, 1) > 0.8 else None,
+                "time": candle["time"],
+                "open": candle["open"],
+                "high": candle["high"],
+                "low": candle["low"],
+                "close": candle["close"],
+                "signal": (
+                    "BUY"
+                    if candle["is_final"] and candle["close"] > candle["open"]
+                    else None
+                ),
             }
-
             await websocket.send_json(real_time_data)
-            print(f"Sent real-time data: {real_time_data}")
-            await asyncio.sleep(3)
     except WebSocketDisconnect:
         print("Client disconnected")
     except Exception as e:
