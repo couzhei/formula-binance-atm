@@ -19,6 +19,10 @@ def calculate_rsi(df, length):
     return df
 
 
+def calculate_sma(df, period: int) -> pd.DataFrame:
+    return df["Close"].rolling(window=period).mean()
+
+
 def calculate_indicator_signals(df, indicator_name, variables, detect_divergence=False):
     signals = {"indicator": indicator_name, "divergence_detected": False, "side": None}
     if indicator_name == "MACD":
@@ -34,4 +38,10 @@ def calculate_indicator_signals(df, indicator_name, variables, detect_divergence
         df = calculate_rsi(df, variables.get("length", 14))
         signals["last_value"] = df["RSI"].iloc[-1]
         # ...existing code...
+    elif indicator_name == "SMA":
+        df[f'SMA_{variables.get("period", 21)}'] = calculate_sma(
+            df,
+            period=variables.get("period", 21),
+        )
+        signals["last_value"] = df["SMA"].iloc[-1]
     return df, signals
