@@ -1,4 +1,4 @@
-import { CandlestickData, createChart, IChartApi, ISeriesApi, Marker } from 'lightweight-charts';
+import { Time, CandlestickData, createChart, IChartApi, ISeriesApi, SeriesMarker } from 'lightweight-charts';
 import { useEffect, useRef, useState } from 'react';
 
 const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8001';
@@ -35,8 +35,8 @@ interface RealTimeData {
 
 const ChartPage: React.FC = () => {
   const chartRef = useRef<HTMLDivElement>(null);
-  const chart = useRef<IChartApi>();
-  const candleSeries = useRef<ISeriesApi<'Candlestick'>>();
+  const chart = useRef<IChartApi | undefined>(undefined);
+  const candleSeries = useRef<ISeriesApi<'Candlestick'> | undefined>(undefined);
   const [data, setData] = useState<ApiResponse | null>(null);
 
   useEffect(() => {
@@ -54,7 +54,7 @@ const ChartPage: React.FC = () => {
         width: 800,
         height: 600,
         layout: {
-          backgroundColor: '#ffffff',
+          background: { color: '#ffffff' },
           textColor: '#333333',
         },
         grid: {
@@ -78,14 +78,14 @@ const ChartPage: React.FC = () => {
       candleSeries.current = chart.current.addCandlestickSeries();
 
       // Prepare candlestick data with UNIX timestamps
-      const candles: CandlestickData[] = data.historical_data.map(item => {
+      const candles: CandlestickData<Time>[] = data.historical_data.map(item => {
         // Ensure timestamp is a number and in seconds
         const timestamp = typeof item.timestamp === 'string' 
           ? parseInt(item.timestamp, 10)
           : item.timestamp;
           
         return {
-          time: timestamp,
+          time: timestamp as Time,
           open: Number(item.open),
           high: Number(item.high),
           low: Number(item.low),
@@ -99,20 +99,20 @@ const ChartPage: React.FC = () => {
 
       candleSeries.current.setData(candles);
 
-      const markers: Marker[] = [
+      const markers: SeriesMarker<Time>[] = [
         ...data.buy_signals.map(signal => ({
-          time: typeof signal.timestamp === 'string' 
+          time: (typeof signal.timestamp === 'string' 
             ? parseInt(signal.timestamp, 10) 
-            : signal.timestamp,
+            : signal.timestamp) as Time,
           position: 'belowBar' as const,
           color: 'green',
           shape: 'arrowUp' as const,
           text: 'BUY',
         })),
         ...data.sell_signals.map(signal => ({
-          time: typeof signal.timestamp === 'string' 
+          time: (typeof signal.timestamp === 'string' 
             ? parseInt(signal.timestamp, 10) 
-            : signal.timestamp,
+            : signal.timestamp) as Time,
           position: 'aboveBar' as const,
           color: 'red',
           shape: 'arrowDown' as const,
@@ -154,7 +154,7 @@ const ChartPage: React.FC = () => {
         try {
           // Update candlestick with properly formatted time
           candleSeries.current?.update({
-            time: timestamp as number,
+            time: timestamp as Time,
             open: realTimeData.open,
             high: realTimeData.high,
             low: realTimeData.low,
@@ -173,8 +173,8 @@ const ChartPage: React.FC = () => {
 
         // Add marker if there's a signal
         if (realTimeData.signal) {
-          const marker: Marker = {
-            time: realTimeData.time,  // Use Unix time directly
+          const marker: SeriesMarker<Time> = {
+            time: realTimeData.time as Time,  // Use Unix time directly
             position: realTimeData.signal === 'BUY' ? 'belowBar' : 'aboveBar',
             color: realTimeData.signal === 'BUY' ? 'green' : 'red',
             shape: realTimeData.signal === 'BUY' ? 'arrowUp' : 'arrowDown',
