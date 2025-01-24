@@ -7,7 +7,7 @@
 // export default nextConfig;
 module.exports = {
   reactStrictMode: true,
-  webpack: (config) => {
+  webpack: (config: any) => {
     return config;
   },
 };

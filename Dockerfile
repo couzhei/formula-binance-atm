@@ -15,7 +15,8 @@ COPY pyproject.toml uv.lock ./
 ENV PATH=/root/.local/bin:$PATH
 
 # Create virtual environment and install dependencies
-RUN uv sync --no-dev --frozen --no-install-project --no-python-downloads
+RUN uv sync --no-dev 
+# --frozen --no-install-project --no-python-downloads
 
 # Copy the application code after dependencies are installed
 COPY . /app/
