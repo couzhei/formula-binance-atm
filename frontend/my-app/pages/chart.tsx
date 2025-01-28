@@ -38,6 +38,7 @@ const ChartPage: React.FC = () => {
   const chart = useRef<IChartApi | undefined>(undefined);
   const candleSeries = useRef<ISeriesApi<'Candlestick'> | undefined>(undefined);
   const [data, setData] = useState<ApiResponse | null>(null);
+  const lastProcessedInterval = useRef<number | null>(null);
 
   useEffect(() => {
     // Fetch initial historical data
@@ -133,7 +134,7 @@ const ChartPage: React.FC = () => {
       }
 
       // Initialize WebSocket for real-time data
-      const socket = new WebSocket(`ws://${backendUrl.replace('http://', '')}/ws/data`);
+      const socket = new WebSocket(`ws://${backendUrl.replace('http://', '')}/ws/kucoin`);
 
       socket.onmessage = (event) => {
         const realTimeData: RealTimeData = JSON.parse(event.data);
@@ -160,6 +161,28 @@ const ChartPage: React.FC = () => {
             low: realTimeData.low,
             close: realTimeData.close,
           });
+
+          // Check if we have moved to a new interval
+          if (lastProcessedInterval.current !== null && timestamp > lastProcessedInterval.current) {
+            // Add marker if there's a signal
+            if (realTimeData.signal) {
+              const marker: SeriesMarker<Time> = {
+                time: realTimeData.time as Time,  // Use Unix time directly
+                position: realTimeData.signal === 'BUY' ? 'belowBar' : 'aboveBar',
+                color: realTimeData.signal === 'BUY' ? 'green' : 'red',
+                shape: realTimeData.signal === 'BUY' ? 'arrowUp' : 'arrowDown',
+                text: realTimeData.signal,
+              };
+
+              // Get existing markers and append the new one
+              const existingMarkers = candleSeries.current?.markers() || [];
+              existingMarkers.push(marker);
+              candleSeries.current?.setMarkers(existingMarkers);
+            }
+          }
+
+          // Update the last processed interval
+          lastProcessedInterval.current = timestamp;
         } catch (error) {
           console.error('Error updating candlestick:', error);
           console.error('Update data:', {
@@ -169,22 +192,6 @@ const ChartPage: React.FC = () => {
             low: realTimeData.low,
             close: realTimeData.close,
           });
-        }
-
-        // Add marker if there's a signal
-        if (realTimeData.signal) {
-          const marker: SeriesMarker<Time> = {
-            time: realTimeData.time as Time,  // Use Unix time directly
-            position: realTimeData.signal === 'BUY' ? 'belowBar' : 'aboveBar',
-            color: realTimeData.signal === 'BUY' ? 'green' : 'red',
-            shape: realTimeData.signal === 'BUY' ? 'arrowUp' : 'arrowDown',
-            text: realTimeData.signal,
-          };
-
-          // Get existing markers and append the new one
-          const existingMarkers = candleSeries.current?.markers() || [];
-          existingMarkers.push(marker);
-          candleSeries.current?.setMarkers(existingMarkers);
         }
       };
 

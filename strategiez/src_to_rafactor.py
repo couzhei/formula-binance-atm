@@ -42,7 +42,6 @@ def calculate_indicator_signals(
                 signals["side"] = "SELL"
 
     elif indicator_name == "RSI":
-
         length = variables.get("length", 14)
         delta = df["close"].diff()
         print("We're okay")

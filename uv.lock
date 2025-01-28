@@ -112,6 +112,7 @@ dependencies = [
     { name = "fastapi" },
     { name = "pandas" },
     { name = "python-dotenv" },
+    { name = "requests" },
     { name = "uvicorn" },
     { name = "websockets" },
 ]
@@ -122,6 +123,7 @@ requires-dist = [
     { name = "fastapi", specifier = ">=0.115.7" },
     { name = "pandas", specifier = ">=2.2.3" },
     { name = "python-dotenv", specifier = ">=1.0.1" },
+    { name = "requests", specifier = ">=2.32.3" },
     { name = "uvicorn", specifier = ">=0.34.0" },
     { name = "websockets", specifier = ">=14.2" },
 ]

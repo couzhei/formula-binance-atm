@@ -10,7 +10,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
-from binance_api import get_binance_candles, get_historical_klines
+from binance_api import (
+    get_binance_candles,
+    get_historical_klines,
+    get_historical_klines_from_kucoin,
+    get_kucoin_candles,
+)
 from strategiez.src_to_rafactor import (
     backtest_signals,
     calculate_indicator_signals,
@@ -55,8 +60,8 @@ class BacktestRequest(BaseModel):
 @app.get("/historical_data")
 def get_historical_data():
     try:
-
-        df = get_historical_klines(interval="1m", limit=50)
+        # df = get_historical_klines(interval="1m", limit=50)
+        df = get_historical_klines_from_kucoin(interval="1m", limit=50)
 
         df = df.sort_values(by="timestamp", ascending=True)
 
@@ -122,6 +127,35 @@ async def websocket_endpoint(websocket: WebSocket):
                 "signal": (
                     "BUY"
                     if candle["is_final"] and candle["close"] > candle["open"]
+                    else None
+                ),
+            }
+            await websocket.send_json(real_time_data)
+    except WebSocketDisconnect:
+        print("Client disconnected")
+    except Exception as e:
+        print(f"Error: {e}")
+
+
+@app.websocket("/ws/kucoin")
+async def websocket_kucoin_endpoint(websocket: WebSocket):
+    await websocket.accept()
+    try:
+        async for candle in get_kucoin_candles(
+            symbol="BTC-USDT",
+            interval="1min",
+        ):
+            real_time_data = {
+                "time": candle["time"],
+                "open": candle["open"],
+                "high": candle["high"],
+                "low": candle["low"],
+                "close": candle["close"],
+                "signal": (
+                    "BUY"
+                    if candle["close"] > candle["open"]
+                    else "SELL"
+                    if candle["close"] < candle["open"]
                     else None
                 ),
             }
