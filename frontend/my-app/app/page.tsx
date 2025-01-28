@@ -1,6 +1,6 @@
 import Image from "next/image";
 import styles from "./page.module.css";
-import Link from "react";
+import Link from "next/link"; // Correct import for Link
 
 export default function Home() {
   return (
@@ -21,9 +21,7 @@ export default function Home() {
           <li>Save and see your changes instantly.</li>
           <li>
             {/* With Next.js Link */}
-            <Link href="/chart/">
-              <a>Navigate to Chart</a>
-            </Link>
+            <Link href="/chart">Navigate to Chart</Link>
           </li>
         </ol>
 
