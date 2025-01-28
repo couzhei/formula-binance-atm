@@ -184,7 +184,7 @@ const ChartPage: React.FC = () => {
           // Update SMA data in the temporary array
           const newSmaData = [...smaDataRef.current];
           newSmaData.push({
-            time: timestamp,
+            time: timestamp as Time,
             value: realTimeData.close,
           });
 
