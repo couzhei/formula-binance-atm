@@ -18,6 +18,9 @@ export default function Home() {
             Get started by editing <code>app/page.tsx</code>.
           </li>
           <li>Save and see your changes instantly.</li>
+          <li>
+            <a href="/chart">Go to the candlesticks chart page</a>
+          </li>
         </ol>
 
         <div className={styles.ctas}>
