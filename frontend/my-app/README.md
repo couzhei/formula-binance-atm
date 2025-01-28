@@ -1,5 +1,7 @@
 ## Getting Started
 
+[![Netlify Status](https://api.netlify.com/api/v1/badges/11b3c195-eb26-4035-bbee-3ed36bcc5601/deploy-status)](https://app.netlify.com/sites/astonishing-klepon-cbc7e9/deploys)
+
 ### Prerequisites
 
 Make sure you have the following installed on your machine:
