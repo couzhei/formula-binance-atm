@@ -1,4 +1,4 @@
-import { Time, CandlestickData, createChart, IChartApi, ISeriesApi, SeriesMarker } from 'lightweight-charts';
+import { Time, CandlestickData, LineStyle, createChart, IChartApi, ISeriesApi, SeriesMarker, LineData } from 'lightweight-charts';
 import { useEffect, useRef, useState } from 'react';
 
 const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8001';
@@ -37,8 +37,10 @@ const ChartPage: React.FC = () => {
   const chartRef = useRef<HTMLDivElement>(null);
   const chart = useRef<IChartApi | undefined>(undefined);
   const candleSeries = useRef<ISeriesApi<'Candlestick'> | undefined>(undefined);
+  const smaSeries = useRef<ISeriesApi<'Line'> | undefined>(undefined);
   const [data, setData] = useState<ApiResponse | null>(null);
   const lastProcessedInterval = useRef<number | null>(null);
+  const smaDataRef = useRef<LineData[]>([]);
 
   useEffect(() => {
     // Fetch initial historical data
@@ -99,6 +101,23 @@ const ChartPage: React.FC = () => {
       console.log('Last candle timestamp:', candles[candles.length - 1]?.time);
 
       candleSeries.current.setData(candles);
+
+      // Calculate SMA with NaN for initial values
+      const smaWindowSize = 10;
+      const smaData: LineData[] = candles.map((point, index, array) => {
+        if (index < smaWindowSize - 1) return { time: point.time, value: NaN };
+        const sum = array.slice(index - smaWindowSize + 1, index + 1).reduce((acc, curr) => acc + curr.close, 0);
+        return { time: point.time, value: sum / smaWindowSize };
+      });
+
+      smaSeries.current = chart.current.addLineSeries({
+        color: 'rgb(27, 39, 129)',
+        lineWidth: 2,
+        lineStyle: LineStyle.Solid,
+      });
+
+      smaSeries.current.setData(smaData);
+      smaDataRef.current = smaData;
 
       const markers: SeriesMarker<Time>[] = [
         ...data.buy_signals.map(signal => ({
@@ -162,8 +181,28 @@ const ChartPage: React.FC = () => {
             close: realTimeData.close,
           });
 
+          // Update SMA data in the temporary array
+          const newSmaData = [...smaDataRef.current];
+          newSmaData.push({
+            time: timestamp,
+            value: realTimeData.close,
+          });
+
+          if (newSmaData.length > smaWindowSize) {
+            const sum = newSmaData.slice(-smaWindowSize).reduce((acc, curr) => acc + curr.value, 0);
+            const smaValue = sum / smaWindowSize;
+            newSmaData[newSmaData.length - 1].value = smaValue;
+          } else {
+            newSmaData[newSmaData.length - 1].value = NaN;
+          }
+
+          smaDataRef.current = newSmaData;
+
           // Check if we have moved to a new interval
           if (lastProcessedInterval.current !== null && timestamp > lastProcessedInterval.current) {
+            // Update the SMA series
+            smaSeries.current?.setData(newSmaData);
+
             // Add marker if there's a signal
             if (realTimeData.signal) {
               const marker: SeriesMarker<Time> = {
@@ -179,10 +218,10 @@ const ChartPage: React.FC = () => {
               existingMarkers.push(marker);
               candleSeries.current?.setMarkers(existingMarkers);
             }
-          }
 
-          // Update the last processed interval
-          lastProcessedInterval.current = timestamp;
+            // Update the last processed interval
+            lastProcessedInterval.current = timestamp;
+          }
         } catch (error) {
           console.error('Error updating candlestick:', error);
           console.error('Update data:', {
