@@ -1,10 +1,20 @@
-import { Time, CandlestickData, LineStyle, createChart, IChartApi, ISeriesApi, SeriesMarker, LineData } from 'lightweight-charts';
-import { useEffect, useRef, useState } from 'react';
+import {
+  Time,
+  CandlestickData,
+  LineStyle,
+  createChart,
+  IChartApi,
+  ISeriesApi,
+  SeriesMarker,
+  LineData,
+} from "lightweight-charts";
+import { useEffect, useRef, useState } from "react";
 
-const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8001';
+const backendUrl =
+  process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8001";
 
 interface HistoricalData {
-  timestamp: number;  // Unix timestamp in seconds
+  timestamp: number; // Unix timestamp in seconds
   open: number;
   high: number;
   low: number;
@@ -13,9 +23,9 @@ interface HistoricalData {
 }
 
 interface Signal {
-  timestamp: number;  // Unix timestamp in seconds
+  timestamp: number; // Unix timestamp in seconds
   price: number;
-  type: 'BUY' | 'SELL';
+  type: "BUY" | "SELL";
 }
 
 interface ApiResponse {
@@ -25,19 +35,19 @@ interface ApiResponse {
 }
 
 interface RealTimeData {
-  time: number;  // Unix timestamp in seconds
+  time: number; // Unix timestamp in seconds
   open: number;
   high: number;
   low: number;
   close: number;
-  signal?: 'BUY' | 'SELL' | null;
+  signal?: "BUY" | "SELL" | null;
 }
 
 const ChartPage: React.FC = () => {
   const chartRef = useRef<HTMLDivElement>(null);
   const chart = useRef<IChartApi | undefined>(undefined);
-  const candleSeries = useRef<ISeriesApi<'Candlestick'> | undefined>(undefined);
-  const smaSeries = useRef<ISeriesApi<'Line'> | undefined>(undefined);
+  const candleSeries = useRef<ISeriesApi<"Candlestick"> | undefined>(undefined);
+  const smaSeries = useRef<ISeriesApi<"Line"> | undefined>(undefined);
   const [data, setData] = useState<ApiResponse | null>(null);
   const lastProcessedInterval = useRef<number | null>(null);
   const smaDataRef = useRef<LineData[]>([]);
@@ -45,9 +55,9 @@ const ChartPage: React.FC = () => {
   useEffect(() => {
     // Fetch initial historical data
     fetch(`${backendUrl}/historical_data`)
-      .then(response => response.json())
-      .then(apiData => setData(apiData))
-      .catch(error => console.error('Error fetching data:', error));
+      .then((response) => response.json())
+      .then((apiData) => setData(apiData))
+      .catch((error) => console.error("Error fetching data:", error));
   }, []);
 
   useEffect(() => {
@@ -57,15 +67,15 @@ const ChartPage: React.FC = () => {
         width: 800,
         height: 600,
         layout: {
-          background: { color: '#ffffff' },
-          textColor: '#333333',
+          background: { color: "#ffffff" },
+          textColor: "#333333",
         },
         grid: {
           vertLines: {
-            color: '#eeeeee',
+            color: "#eeeeee",
           },
           horzLines: {
-            color: '#eeeeee',
+            color: "#eeeeee",
           },
         },
         timeScale: {
@@ -81,24 +91,27 @@ const ChartPage: React.FC = () => {
       candleSeries.current = chart.current.addCandlestickSeries();
 
       // Prepare candlestick data with UNIX timestamps
-      const candles: CandlestickData<Time>[] = data.historical_data.map(item => {
-        // Ensure timestamp is a number and in seconds
-        const timestamp = typeof item.timestamp === 'string' 
-          ? parseInt(item.timestamp, 10)
-          : item.timestamp;
-          
-        return {
-          time: timestamp as Time,
-          open: Number(item.open),
-          high: Number(item.high),
-          low: Number(item.low),
-          close: Number(item.close),
-        };
-      });
+      const candles: CandlestickData<Time>[] = data.historical_data.map(
+        (item) => {
+          // Ensure timestamp is a number and in seconds
+          const timestamp =
+            typeof item.timestamp === "string"
+              ? parseInt(item.timestamp, 10)
+              : item.timestamp;
+
+          return {
+            time: timestamp as Time,
+            open: Number(item.open),
+            high: Number(item.high),
+            low: Number(item.low),
+            close: Number(item.close),
+          };
+        }
+      );
 
       // Debug timestamps
-      console.log('First candle timestamp:', candles[0]?.time);
-      console.log('Last candle timestamp:', candles[candles.length - 1]?.time);
+      console.log("First candle timestamp:", candles[0]?.time);
+      console.log("Last candle timestamp:", candles[candles.length - 1]?.time);
 
       candleSeries.current.setData(candles);
 
@@ -106,12 +119,14 @@ const ChartPage: React.FC = () => {
       const smaWindowSize = 10;
       const smaData: LineData[] = candles.map((point, index, array) => {
         if (index < smaWindowSize - 1) return { time: point.time, value: NaN };
-        const sum = array.slice(index - smaWindowSize + 1, index + 1).reduce((acc, curr) => acc + curr.close, 0);
+        const sum = array
+          .slice(index - smaWindowSize + 1, index + 1)
+          .reduce((acc, curr) => acc + curr.close, 0);
         return { time: point.time, value: sum / smaWindowSize };
       });
 
       smaSeries.current = chart.current.addLineSeries({
-        color: 'rgb(27, 39, 129)',
+        color: "rgb(27, 39, 129)",
         lineWidth: 2,
         lineStyle: LineStyle.Solid,
       });
@@ -120,23 +135,23 @@ const ChartPage: React.FC = () => {
       smaDataRef.current = smaData;
 
       const markers: SeriesMarker<Time>[] = [
-        ...data.buy_signals.map(signal => ({
-          time: (typeof signal.timestamp === 'string' 
-            ? parseInt(signal.timestamp, 10) 
+        ...data.buy_signals.map((signal) => ({
+          time: (typeof signal.timestamp === "string"
+            ? parseInt(signal.timestamp, 10)
             : signal.timestamp) as Time,
-          position: 'belowBar' as const,
-          color: 'green',
-          shape: 'arrowUp' as const,
-          text: 'BUY',
+          position: "belowBar" as const,
+          color: "green",
+          shape: "arrowUp" as const,
+          text: "BUY",
         })),
-        ...data.sell_signals.map(signal => ({
-          time: (typeof signal.timestamp === 'string' 
-            ? parseInt(signal.timestamp, 10) 
+        ...data.sell_signals.map((signal) => ({
+          time: (typeof signal.timestamp === "string"
+            ? parseInt(signal.timestamp, 10)
             : signal.timestamp) as Time,
-          position: 'aboveBar' as const,
-          color: 'red',
-          shape: 'arrowDown' as const,
-          text: 'SELL',
+          position: "aboveBar" as const,
+          color: "red",
+          shape: "arrowDown" as const,
+          text: "SELL",
         })),
       ];
 
@@ -153,7 +168,9 @@ const ChartPage: React.FC = () => {
       }
 
       // Initialize WebSocket for real-time data
-      const socket = new WebSocket(`ws://${backendUrl.replace('http://', '')}/ws/kucoin`);
+      const socket = new WebSocket(
+        `ws://${backendUrl.replace("https://", "")}/ws/kucoin`
+      );
 
       socket.onmessage = (event) => {
         const realTimeData: RealTimeData = JSON.parse(event.data);
@@ -161,15 +178,17 @@ const ChartPage: React.FC = () => {
 
         // Ensure timestamp is in seconds and is a number
         const timestamp = Math.floor(
-          typeof realTimeData.time === 'string' 
-            ? parseInt(realTimeData.time, 10) 
+          typeof realTimeData.time === "string"
+            ? parseInt(realTimeData.time, 10)
             : realTimeData.time
         );
 
         // Debug logging
-        const lastBar = candleSeries.current?.data().at(candleSeries.current.data().length - 1);
-        console.log('Last candle time:', lastBar?.time);
-        console.log('New update time:', timestamp);
+        const lastBar = candleSeries.current
+          ?.data()
+          .at(candleSeries.current.data().length - 1);
+        console.log("Last candle time:", lastBar?.time);
+        console.log("New update time:", timestamp);
 
         try {
           // Update candlestick with properly formatted time
@@ -189,7 +208,9 @@ const ChartPage: React.FC = () => {
           });
 
           if (newSmaData.length > smaWindowSize) {
-            const sum = newSmaData.slice(-smaWindowSize).reduce((acc, curr) => acc + curr.value, 0);
+            const sum = newSmaData
+              .slice(-smaWindowSize)
+              .reduce((acc, curr) => acc + curr.value, 0);
             const smaValue = sum / smaWindowSize;
             newSmaData[newSmaData.length - 1].value = smaValue;
           } else {
@@ -199,17 +220,21 @@ const ChartPage: React.FC = () => {
           smaDataRef.current = newSmaData;
 
           // Check if we have moved to a new interval
-          if (lastProcessedInterval.current !== null && timestamp > lastProcessedInterval.current) {
+          if (
+            lastProcessedInterval.current !== null &&
+            timestamp > lastProcessedInterval.current
+          ) {
             // Update the SMA series
             smaSeries.current?.setData(newSmaData);
 
             // Add marker if there's a signal
             if (realTimeData.signal) {
               const marker: SeriesMarker<Time> = {
-                time: realTimeData.time as Time,  // Use Unix time directly
-                position: realTimeData.signal === 'BUY' ? 'belowBar' : 'aboveBar',
-                color: realTimeData.signal === 'BUY' ? 'green' : 'red',
-                shape: realTimeData.signal === 'BUY' ? 'arrowUp' : 'arrowDown',
+                time: realTimeData.time as Time, // Use Unix time directly
+                position:
+                  realTimeData.signal === "BUY" ? "belowBar" : "aboveBar",
+                color: realTimeData.signal === "BUY" ? "green" : "red",
+                shape: realTimeData.signal === "BUY" ? "arrowUp" : "arrowDown",
                 text: realTimeData.signal,
               };
 
@@ -223,8 +248,8 @@ const ChartPage: React.FC = () => {
             lastProcessedInterval.current = timestamp;
           }
         } catch (error) {
-          console.error('Error updating candlestick:', error);
-          console.error('Update data:', {
+          console.error("Error updating candlestick:", error);
+          console.error("Update data:", {
             time: timestamp,
             open: realTimeData.open,
             high: realTimeData.high,
@@ -235,11 +260,11 @@ const ChartPage: React.FC = () => {
       };
 
       socket.onclose = () => {
-        console.log('WebSocket connection closed');
+        console.log("WebSocket connection closed");
       };
 
       socket.onerror = (error) => {
-        console.error('WebSocket error:', error);
+        console.error("WebSocket error:", error);
       };
 
       return () => {
