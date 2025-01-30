@@ -200,30 +200,30 @@ const ChartPage: React.FC = () => {
             close: realTimeData.close,
           });
 
-          // Update SMA data in the temporary array
-          const newSmaData = [...smaDataRef.current];
-          newSmaData.push({
-            time: timestamp as Time,
-            value: realTimeData.close,
-          });
-
-          if (newSmaData.length > smaWindowSize) {
-            const sum = newSmaData
-              .slice(-smaWindowSize)
-              .reduce((acc, curr) => acc + curr.value, 0);
-            const smaValue = sum / smaWindowSize;
-            newSmaData[newSmaData.length - 1].value = smaValue;
-          } else {
-            newSmaData[newSmaData.length - 1].value = NaN;
-          }
-
-          smaDataRef.current = newSmaData;
-
           // Check if we have moved to a new interval
           if (
             lastProcessedInterval.current !== null &&
             timestamp > lastProcessedInterval.current
           ) {
+            // Update SMA data in the temporary array
+            const newSmaData = [...smaDataRef.current];
+            newSmaData.push({
+              time: timestamp as Time,
+              value: realTimeData.close,
+            });
+
+            if (newSmaData.length > smaWindowSize) {
+              const sum = newSmaData
+                .slice(-smaWindowSize)
+                .reduce((acc, curr) => acc + curr.value, 0);
+              const smaValue = sum / smaWindowSize;
+              newSmaData[newSmaData.length - 1].value = smaValue;
+            } else {
+              newSmaData[newSmaData.length - 1].value = NaN;
+            }
+
+            smaDataRef.current = newSmaData;
+
             // Update the SMA series
             smaSeries.current?.setData(newSmaData);
 
