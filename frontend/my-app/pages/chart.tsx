@@ -168,9 +168,9 @@ const ChartPage: React.FC = () => {
       }
 
       // Initialize WebSocket for real-time data
-      const socket = new WebSocket(
-        `ws://${backendUrl.replace("https://", "")}/ws/kucoin`
-      );
+      const wsProtocol = backendUrl.startsWith("https://") ? "wss://" : "ws://";
+      const wsUrl = backendUrl.replace(/^https?:\/\//, "");
+      const socket = new WebSocket(`${wsProtocol}${wsUrl}/ws/kucoin`);
 
       socket.onmessage = (event) => {
         const realTimeData: RealTimeData = JSON.parse(event.data);

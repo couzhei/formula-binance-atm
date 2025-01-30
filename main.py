@@ -1,245 +1,276 @@
-import asyncio
-import os
-from datetime import datetime
-from random import uniform
+import { useEffect, useRef, useState } from 'react';
+import { createChart, IChartApi, ISeriesApi, LineData, SeriesMarker, Time } from 'lightweight-charts';
 
-import pandas as pd
-from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
-from pydantic import BaseModel
+const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8001';
 
-from binance_api import (
-    get_binance_candles,
-    get_historical_klines,
-    get_historical_klines_from_kucoin,
-    get_kucoin_candles,
-)
-from strategiez.src_to_rafactor import (
-    backtest_signals,
-    calculate_indicator_signals,
-    generate_signals,
-)
+interface HistoricalData {
+  timestamp: number;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+}
 
-load_dotenv()
+interface Signal {
+  timestamp: number;
+  price: number;
+  type: 'BUY' | 'SELL';
+}
 
-app = FastAPI()
+interface ApiResponse {
+  historical_data: HistoricalData[];
+  buy_signals: Signal[];
+  sell_signals: Signal[];
+}
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+interface RealTimeData {
+  time: number;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  signal?: 'BUY' | 'SELL' | null;
+}
 
-# Define paths
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-HISTORICAL_DATA_PATH = os.path.join(BASE_DIR, "tests", "Historical_data.csv")
+const fetchKuCoinToken = async () => {
+  const response = await fetch('https://api.kucoin.com/api/v1/bullet-public', {
+    method: 'POST',
+  });
+  const data = await response.json();
+  return data.data;
+};
 
+const ChartPage: React.FC = () => {
+  const chartRef = useRef<HTMLDivElement>(null);
+  const chart = useRef<IChartApi | undefined>(undefined);
+  const candleSeries = useRef<ISeriesApi<'Candlestick'> | undefined>(undefined);
+  const smaSeries = useRef<ISeriesApi<'Line'> | undefined>(undefined);
+  const [data, setData] = useState<ApiResponse | null>(null);
+  const lastProcessedInterval = useRef<number | null>(null);
+  const smaDataRef = useRef<LineData[]>([]);
 
-class CalculateRequest(BaseModel):
-    price_data: list
-    indicator_name: str
-    variables: dict
-    detect_divergence: bool = False
+  useEffect(() => {
+    // Fetch initial historical data
+    fetch(`${backendUrl}/historical_data`)
+      .then(response => response.json())
+      .then(apiData => setData(apiData))
+      .catch(error => console.error('Error fetching data:', error));
+  }, []);
 
+  useEffect(() => {
+    if (chartRef.current && data && !chart.current) {
+      // Initialize chart
+      chart.current = createChart(chartRef.current, {
+        width: 800,
+        height: 600,
+        layout: {
+          background: { color: '#ffffff' },
+          textColor: '#333333',
+        },
+        grid: {
+          vertLines: {
+            color: '#eeeeee',
+          },
+          horzLines: {
+            color: '#eeeeee',
+          },
+        },
+        timeScale: {
+          timeVisible: true,
+          secondsVisible: false,
+          tickMarkFormatter: (time: number) => {
+            const date = new Date(time * 1000);
+            return date.toLocaleTimeString();
+          },
+        },
+      });
 
-class GenerateRequest(BaseModel):
-    price_data: list
+      candleSeries.current = chart.current.addCandlestickSeries();
 
-
-class BacktestRequest(BaseModel):
-    price_data: list
-    buy_signals: list
-    sell_signals: list
-    initial_balance: float = 10000.0
-
-
-@app.get("/historical_data")
-def get_historical_data():
-    """Get historical data"""
-    try:
-        # df = get_historical_klines(interval="1m", limit=50)
-        df = get_historical_klines_from_kucoin(interval="1m", limit=50)
-
-        df = df.sort_values(by="timestamp", ascending=True)
-
-        # Calculate indicators and generate signals
-        df, macd_signals = calculate_indicator_signals(
-            df,
-            "MACD",
-            {"fast_length": 12, "slow_length": 26, "signal_length": 9},
-            detect_divergence=True,
-        )
-        df, rsi_signals = calculate_indicator_signals(
-            df, "RSI", {"length": 14}, detect_divergence=True
-        )
-        buy_signals, sell_signals = generate_signals(df)
-
-        df = (
-            df.select_dtypes(include=["float64", "int64"]).astype(str).combine_first(df)
-        )
-
+      // Prepare candlestick data with UNIX timestamps
+      const candles: CandlestickData<Time>[] = data.historical_data.map(item => {
+        const timestamp = typeof item.timestamp === 'string' 
+          ? parseInt(item.timestamp, 10)
+          : item.timestamp;
+          
         return {
-            "historical_data": df.to_dict(orient="records"),
-            "buy_signals": buy_signals,
-            "sell_signals": sell_signals,
-        }
+          time: timestamp as Time,
+          open: Number(item.open),
+          high: Number(item.high),
+          low: Number(item.low),
+          close: Number(item.close),
+        };
+      });
 
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+      candleSeries.current.setData(candles);
 
+      // Calculate SMA with NaN for initial values
+      const smaWindowSize = 10;
+      const smaData: LineData[] = candles.map((point, index, array) => {
+        if (index < smaWindowSize - 1) return { time: point.time, value: NaN };
+        const sum = array.slice(index - smaWindowSize + 1, index + 1).reduce((acc, curr) => acc + curr.close, 0);
+        return { time: point.time, value: sum / smaWindowSize };
+      });
 
-@app.post("/calculate")
-def calculate(req: CalculateRequest):
-    """Calculate indicator signals"""
-    df = pd.DataFrame(req.price_data)
+      smaSeries.current = chart.current.addLineSeries({
+        color: 'rgb(27, 39, 129)',
+        lineWidth: 2,
+        lineStyle: LineStyle.Solid,
+      });
 
-    # Ensure datetime is in Unix time format
-    df["datetime"] = pd.to_datetime(df["datetime"]).astype(int) // 10**9
+      smaSeries.current.setData(smaData);
+      smaDataRef.current = smaData;
 
-    df, signals = calculate_indicator_signals(
-        df, req.indicator_name, req.variables, req.detect_divergence
-    )
+      const markers: SeriesMarker<Time>[] = [
+        ...data.buy_signals.map(signal => ({
+          time: (typeof signal.timestamp === 'string' 
+            ? parseInt(signal.timestamp, 10) 
+            : signal.timestamp) as Time,
+          position: 'belowBar' as const,
+          color: 'green',
+          shape: 'arrowUp' as const,
+          text: 'BUY',
+        })),
+        ...data.sell_signals.map(signal => ({
+          time: (typeof signal.timestamp === 'string' 
+            ? parseInt(signal.timestamp, 10) 
+            : signal.timestamp) as Time,
+          position: 'aboveBar' as const,
+          color: 'red',
+          shape: 'arrowDown' as const,
+          text: 'SELL',
+        })),
+      ];
 
-    # Replace NaN and infinite values
-    df = df.replace([float("inf"), -float("inf")], float("nan")).fillna(0)
+      candleSeries.current.setMarkers(markers);
 
-    signals["last_value"] = 0
+      // Set visible range to show last 50 candles
+      if (candles.length >= 50) {
+        chart.current.timeScale().setVisibleRange({
+          from: candles[candles.length - 50].time,
+          to: candles[candles.length - 1].time,
+        });
+      } else {
+        chart.current.timeScale().fitContent();
+      }
 
-    return {"data": df.to_dict(orient="records"), "signals": signals}
+      // Initialize WebSocket for real-time data
+      fetchKuCoinToken().then(tokenData => {
+        const { token, instanceServers } = tokenData;
+        const endpoint = instanceServers[0].endpoint;
+        const connectId = String(Date.now());
 
+        const socket = new WebSocket(`${endpoint}?token=${token}&connectId=${connectId}`);
 
-@app.websocket("/ws/data")
-async def websocket_endpoint(websocket: WebSocket):
-    """Websocket endpoint for realtime binance klines"""
-    await websocket.accept()
-    try:
-        async for candle in get_binance_candles(
-            symbol="btcusdt",
-            interval="1m",
-        ):
-            real_time_data = {
-                "time": candle["time"],
-                "open": candle["open"],
-                "high": candle["high"],
-                "low": candle["low"],
-                "close": candle["close"],
-                "signal": (
-                    "BUY"
-                    if candle["is_final"] and candle["close"] > candle["open"]
-                    else None
-                ),
-            }
-            await websocket.send_json(real_time_data)
-    except WebSocketDisconnect:
-        print("Client disconnected")
-    except Exception as e:
-        print(f"Error: {e}")
+        socket.onopen = () => {
+          console.log('WebSocket connection established');
+          const subscribeMessage = {
+            id: connectId,
+            type: 'subscribe',
+            topic: '/market/candles:BTC-USDT_1min',
+            privateChannel: false,
+            response: true,
+          };
+          socket.send(JSON.stringify(subscribeMessage));
+        };
 
-
-@app.websocket("/ws/kucoin")
-async def websocket_kucoin_endpoint(websocket: WebSocket):
-    """Websocket endpoint for Kucoin data"""
-    await websocket.accept()
-    try:
-        async for candle in get_kucoin_candles(
-            symbol="BTC-USDT",
-            interval="1min",
-        ):
-            real_time_data = {
-                "time": candle["time"],
-                "open": candle["open"],
-                "high": candle["high"],
-                "low": candle["low"],
-                "close": candle["close"],
-                "signal": (
-                    "BUY"
-                    if candle["close"] > candle["open"]
-                    else "SELL"
-                    if candle["close"] < candle["open"]
-                    else None
-                ),
-            }
-            await websocket.send_json(real_time_data)
-    except WebSocketDisconnect:
-        print("Client disconnected")
-    except Exception as e:
-        print(f"Error: {e}")
-
-
-@app.post("/generate_signals")
-def generate(req: GenerateRequest):
-    """Generate buy and sell signals"""
-    df = pd.DataFrame(req.price_data)
-    buy_signals, sell_signals = generate_signals(df)
-    return {"buy_signals": buy_signals, "sell_signals": sell_signals}
-
-
-@app.post("/backtest")
-def backtest(req: BacktestRequest):
-    """Perform backtesting"""
-    df = pd.DataFrame(req.price_data)
-    final_balance = backtest_signals(
-        df, req.buy_signals, req.sell_signals, req.initial_balance
-    )
-    return {"final_balance": final_balance}
-
-
-HTML = """
-<!DOCTYPE html>
-<html>
-    <head>
-        <title>Chat</title>
-    </head>
-    <body>
-        <h1>WebSocket Chat</h1>
-        <form action="" onsubmit="sendMessage(event)">
-            <input type="text" id="messageText" autocomplete="off"/>
-            <button>Send</button>
-        </form>
-        <ul id='messages'>
-        </ul>
-        <script>
-            var ws = new WebSocket("ws://localhost:8001/ws");
-            ws.onmessage = function(event) {
-                var messages = document.getElementById('messages')
-                var message = document.createElement('li')
-                var content = document.createTextNode(event.data)
-                message.appendChild(content)
-                messages.appendChild(message)
+        socket.onmessage = (event) => {
+          const message = JSON.parse(event.data);
+          if (message.type === 'message' && message.subject === 'trade.candles.update') {
+            const klineData = message.data.candles;
+            const realTimeData: RealTimeData = {
+              time: parseInt(klineData[0], 10),
+              open: parseFloat(klineData[1]),
+              close: parseFloat(klineData[2]),
+              high: parseFloat(klineData[3]),
+              low: parseFloat(klineData[4]),
+              signal: null,
             };
-            function sendMessage(event) {
-                var input = document.getElementById("messageText")
-                ws.send(input.value)
-                input.value = ''
-                event.preventDefault()
+
+            // Ensure timestamp is in seconds and is a number
+            const timestamp = Math.floor(realTimeData.time);
+
+            try {
+              // Update candlestick with properly formatted time
+              candleSeries.current?.update({
+                time: timestamp as Time,
+                open: realTimeData.open,
+                high: realTimeData.high,
+                low: realTimeData.low,
+                close: realTimeData.close,
+              });
+
+              // Update SMA data in the temporary array
+              const newSmaData = [...smaDataRef.current];
+              newSmaData.push({
+                time: timestamp as Time,
+                value: realTimeData.close,
+              });
+
+              if (newSmaData.length > smaWindowSize) {
+                const sum = newSmaData.slice(-smaWindowSize).reduce((acc, curr) => acc + curr.value, 0);
+                const smaValue = sum / smaWindowSize;
+                newSmaData[newSmaData.length - 1].value = smaValue;
+              } else {
+                newSmaData[newSmaData.length - 1].value = NaN;
+              }
+
+              smaDataRef.current = newSmaData;
+
+              // Check if we have moved to a new interval
+              if (lastProcessedInterval.current !== null && timestamp > lastProcessedInterval.current) {
+                // Update the SMA series
+                smaSeries.current?.setData(newSmaData);
+
+                // Add marker if there's a signal
+                if (realTimeData.signal) {
+                  const marker: SeriesMarker<Time> = {
+                    time: realTimeData.time as Time,
+                    position: realTimeData.signal === 'BUY' ? 'belowBar' : 'aboveBar',
+                    color: realTimeData.signal === 'BUY' ? 'green' : 'red',
+                    shape: realTimeData.signal === 'BUY' ? 'arrowUp' : 'arrowDown',
+                    text: realTimeData.signal,
+                  };
+
+                  const existingMarkers = candleSeries.current?.markers() || [];
+                  existingMarkers.push(marker);
+                  candleSeries.current?.setMarkers(existingMarkers);
+                }
+
+                // Update the last processed interval
+                lastProcessedInterval.current = timestamp;
+              }
+            } catch (error) {
+              console.error('Error updating candlestick:', error);
+              console.error('Update data:', {
+                time: timestamp as Time,
+                open: realTimeData.open,
+                high: realTimeData.high,
+                low: realTimeData.low,
+                close: realTimeData.close,
+              });
             }
-        </script>
-    </body>
-</html>
-"""
+          }
+        };
 
+        socket.onclose = () => {
+          console.log('WebSocket connection closed');
+        };
 
-@app.get("/")
-async def get():
-    """Websocket chat"""
-    return HTMLResponse(HTML)
+        socket.onerror = (error) => {
+          console.error('WebSocket error:', error);
+        };
 
+        return () => {
+          socket.close();
+          chart.current?.remove();
+        };
+      });
+    }
+  }, [data]);
 
-@app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket):
-    """Websocket chat endpoint"""
-    await websocket.accept()
-    while True:
-        data = await websocket.receive_text()
-        await websocket.send_text(f"Message text was: {data}")
+  return <div ref={chartRef} />;
+};
 
-
-if __name__ == "__main__":
-    """Run the app"""
-    import uvicorn
-
-    uvicorn.run(app, host="0.0.0.0", port=8001)
+export default ChartPage;
