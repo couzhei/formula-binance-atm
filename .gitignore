@@ -92,3 +92,6 @@ venv.bak/
 
 
 .fastapi/
+
+*.crt
+*.key

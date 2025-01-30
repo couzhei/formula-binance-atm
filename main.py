@@ -28,7 +28,7 @@ app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*", "http://34.244.158.75"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -59,7 +59,6 @@ class BacktestRequest(BaseModel):
 
 @app.get("/historical_data")
 def get_historical_data():
-    """Get historical data"""
     try:
         # df = get_historical_klines(interval="1m", limit=50)
         df = get_historical_klines_from_kucoin(interval="1m", limit=50)
@@ -94,7 +93,6 @@ def get_historical_data():
 
 @app.post("/calculate")
 def calculate(req: CalculateRequest):
-    """Calculate indicator signals"""
     df = pd.DataFrame(req.price_data)
 
     # Ensure datetime is in Unix time format
@@ -114,7 +112,6 @@ def calculate(req: CalculateRequest):
 
 @app.websocket("/ws/data")
 async def websocket_endpoint(websocket: WebSocket):
-    """Websocket endpoint for realtime binance klines"""
     await websocket.accept()
     try:
         async for candle in get_binance_candles(
@@ -142,7 +139,6 @@ async def websocket_endpoint(websocket: WebSocket):
 
 @app.websocket("/ws/kucoin")
 async def websocket_kucoin_endpoint(websocket: WebSocket):
-    """Websocket endpoint for Kucoin data"""
     await websocket.accept()
     try:
         async for candle in get_kucoin_candles(
@@ -172,7 +168,6 @@ async def websocket_kucoin_endpoint(websocket: WebSocket):
 
 @app.post("/generate_signals")
 def generate(req: GenerateRequest):
-    """Generate buy and sell signals"""
     df = pd.DataFrame(req.price_data)
     buy_signals, sell_signals = generate_signals(df)
     return {"buy_signals": buy_signals, "sell_signals": sell_signals}
@@ -180,7 +175,6 @@ def generate(req: GenerateRequest):
 
 @app.post("/backtest")
 def backtest(req: BacktestRequest):
-    """Perform backtesting"""
     df = pd.DataFrame(req.price_data)
     final_balance = backtest_signals(
         df, req.buy_signals, req.sell_signals, req.initial_balance
@@ -188,7 +182,7 @@ def backtest(req: BacktestRequest):
     return {"final_balance": final_balance}
 
 
-HTML = """
+html = """
 <!DOCTYPE html>
 <html>
     <head>
@@ -203,7 +197,7 @@ HTML = """
         <ul id='messages'>
         </ul>
         <script>
-            var ws = new WebSocket("ws://localhost:8001/ws");
+            var ws = new WebSocket("wss://34.244.158.75/ws");
             ws.onmessage = function(event) {
                 var messages = document.getElementById('messages')
                 var message = document.createElement('li')
@@ -225,13 +219,11 @@ HTML = """
 
 @app.get("/")
 async def get():
-    """Websocket chat"""
-    return HTMLResponse(HTML)
+    return HTMLResponse(html)
 
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
-    """Websocket chat endpoint"""
     await websocket.accept()
     while True:
         data = await websocket.receive_text()
@@ -239,7 +231,12 @@ async def websocket_endpoint(websocket: WebSocket):
 
 
 if __name__ == "__main__":
-    """Run the app"""
     import uvicorn
 
-    uvicorn.run(app, host="0.0.0.0", port=8001)
+    uvicorn.run(
+        app,
+        host="0.0.0.0",
+        port=8001,
+        ssl_keyfile="/path/to/localhost.key",
+        ssl_certfile="/path/to/localhost.crt",
+    )

@@ -1,0 +1,60 @@
+server {
+    listen 443 ssl;
+    server_name 34.244.158.75; # Replace with your server's public IP or domain
+
+    ssl_certificate /path/to/localhost.crt; # Path to your SSL certificate
+    ssl_certificate_key /path/to/localhost.key; # Path to your SSL private key
+
+    # Route requests to Next.js
+    location / {
+        proxy_pass http://localhost:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_cache_bypass $http_upgrade;
+
+        # CORS headers for Next.js
+        add_header 'Access-Control-Allow-Origin' '*' always;
+        add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS, PUT, DELETE' always;
+        add_header 'Access-Control-Allow-Headers' 'Authorization, Content-Type' always;
+        add_header 'Access-Control-Allow-Credentials' 'true' always;
+    }
+
+    # Route API requests to FastAPI
+    location /api/ {
+        proxy_pass http://localhost:8080;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_cache_bypass $http_upgrade;
+
+        # CORS headers for FastAPI
+        add_header 'Access-Control-Allow-Origin' '*' always;
+        add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS, PUT, DELETE' always;
+        add_header 'Access-Control-Allow-Headers' 'Authorization, Content-Type' always;
+        add_header 'Access-Control-Allow-Credentials' 'true' always;
+
+        # Handle preflight requests
+        if ($request_method = OPTIONS) {
+            add_header 'Access-Control-Allow-Origin' '*';
+            add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS, PUT, DELETE';
+            add_header 'Access-Control-Allow-Headers' 'Authorization, Content-Type';
+            add_header 'Access-Control-Max-Age' 1728000; # Cache preflight response for 20 days
+            add_header 'Content-Type' 'text/plain; charset=utf-8';
+            add_header 'Content-Length' 0;
+            return 204;
+        }
+    }
+}
+
+server {
+    listen 80;
+    server_name 34.244.158.75;
+
+    # Redirect HTTP to HTTPS
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
