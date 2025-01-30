@@ -12,11 +12,14 @@ module.exports = {
   },
 };
 
-// next.config.js
 const fs = require('fs');
 const path = require('path');
 
 module.exports = {
+  reactStrictMode: true,
+  webpack: (config: any) => {
+    return config;
+  },
   devServer: {
     https: {
       key: fs.readFileSync(path.join(__dirname, 'localhost.key')),
