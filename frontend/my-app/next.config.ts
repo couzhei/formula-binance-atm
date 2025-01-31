@@ -4,16 +4,16 @@
 //   /* config options here */
 // };
 
-// export default nextConfig;
-module.exports = {
-  reactStrictMode: true,
-  webpack: (config: any) => {
-    return config;
-  },
-};
+// // export default nextConfig;
+// module.exports = {
+//   reactStrictMode: true,
+//   webpack: (config: any) => {
+//     return config;
+//   },
+// };
 
-const fs = require('fs');
-const path = require('path');
+const fileSync = require('fs');
+const address = require('path');
 
 module.exports = {
   reactStrictMode: true,
@@ -22,8 +22,8 @@ module.exports = {
   },
   devServer: {
     https: {
-      key: fs.readFileSync(path.join(__dirname, 'localhost.key')),
-      cert: fs.readFileSync(path.join(__dirname, 'localhost.crt')),
+      key: fileSync.readFileSync(address.join(__dirname, 'localhost.key')),
+      cert: fileSync.readFileSync(address.join(__dirname, 'localhost.crt')),
     },
   },
 };

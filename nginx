@@ -1,9 +1,9 @@
 server {
     listen 443 ssl;
-    server_name 34.244.158.75; # Replace with your server's public IP or domain
+    server_name 54.217.52.59; # Replace with your server's public IP or domain
 
-    ssl_certificate /path/to/localhost.crt; # Path to your SSL certificate
-    ssl_certificate_key /path/to/localhost.key; # Path to your SSL private key
+    ssl_certificate /home/ubuntu/code/formula-binance-atm/localhost.crt; # Path to your SSL certificate
+    ssl_certificate_key /home/ubuntu/code/formula-binance-atm/localhost.key; # Path to your SSL private key
 
     # Route requests to Next.js
     location / {
@@ -23,12 +23,16 @@ server {
 
     # Route API requests to FastAPI
     location /api/ {
-        proxy_pass http://localhost:8080;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_set_header Host $host;
-        proxy_cache_bypass $http_upgrade;
+        proxy_pass              http://localhost:8080;
+        proxy_http_version                        1.1;
+        proxy_read_timeout                         60;
+        proxy_connect_timeout                      60;
+        proxy_redirect                            off;
+        proxy_set_header Upgrade        $http_upgrade;
+        proxy_set_header Connection         'upgrade';
+        proxy_set_header Host                   $host;
+        proxy_cache_bypass              $http_upgrade;
+
 
         # CORS headers for FastAPI
         add_header 'Access-Control-Allow-Origin' '*' always;
@@ -51,7 +55,7 @@ server {
 
 server {
     listen 80;
-    server_name 34.244.158.75;
+    server_name 54.217.52.59;
 
     # Redirect HTTP to HTTPS
     location / {

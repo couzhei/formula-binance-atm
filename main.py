@@ -56,6 +56,10 @@ class BacktestRequest(BaseModel):
     sell_signals: list
     initial_balance: float = 10000.0
 
+@app.get("/")
+def home():
+    return {"Hello":"World"}
+
 
 @app.get("/historical_data")
 def get_historical_data():
