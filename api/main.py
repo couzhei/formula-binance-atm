@@ -24,11 +24,12 @@ from strategiez.src_to_rafactor import (
 
 load_dotenv()
 
-app = FastAPI()
+app = FastAPI(root_path="/api") # the root path here is very important (why?)
+# Because there are two services actually running through nginx (NextJS and FastAPI)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*", "http://34.244.158.75"],
+    allow_origins=["*", "https://54.217.52.59"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -55,10 +56,6 @@ class BacktestRequest(BaseModel):
     buy_signals: list
     sell_signals: list
     initial_balance: float = 10000.0
-
-@app.get("/")
-def home():
-    return {"Hello":"World"}
 
 
 @app.get("/historical_data")
@@ -201,7 +198,9 @@ html = """
         <ul id='messages'>
         </ul>
         <script>
-            var ws = new WebSocket("wss://34.244.158.75/ws");
+            var ws = new WebSocket("wss://""" +\
+"54.217.52.59" +\
+      """/ws");
             ws.onmessage = function(event) {
                 var messages = document.getElementById('messages')
                 var message = document.createElement('li')
@@ -241,6 +240,6 @@ if __name__ == "__main__":
         app,
         host="0.0.0.0",
         port=8001,
-        ssl_keyfile="/path/to/localhost.key",
-        ssl_certfile="/path/to/localhost.crt",
+        ssl_keyfile="./localhost.key",
+        ssl_certfile="./localhost.crt",
     )
