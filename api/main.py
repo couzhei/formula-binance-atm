@@ -199,8 +199,8 @@ html = """
         </ul>
         <script>
             var ws = new WebSocket("wss://""" +\
-"54.217.52.59" +\
-      """/ws");
+"54.217.52.59/" +\
+      """api/ws");
             ws.onmessage = function(event) {
                 var messages = document.getElementById('messages')
                 var message = document.createElement('li')
