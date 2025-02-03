@@ -1,0 +1,22 @@
+[req]
+distinguished_name = req_distinguished_name
+req_extensions = v3_req
+prompt = no
+
+[req_distinguished_name]
+C = FR
+ST = State
+L = Paris
+O = Markepto
+CN = 54.217.52.59
+
+[v3_req]
+subjectAltName = IP:54.217.52.59
+
+
+/*Next Steps
+If possible, try nip.io:
+sudo certbot --nginx -m your-email@example.com -d 54.217.52.59.nip.io
+Then update your server_name in Nginx to 54.217.52.59.nip.io.
+
+If you must use a bare IP, ensure that Telegram can accept it by testing via an external SSL checker like SSL Labs.*/

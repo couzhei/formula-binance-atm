@@ -1,45 +1,57 @@
+
+# openssl req -newkey rsa:2048 -sha256 -nodes -keyout PRIVATE.key -x509 -days 365 -out PUBLIC.pem -subj "/C=FR/ST=State/L=Paris/O=Markepto/CN=https://54.217.52.59"
+# sudo certbot --nginx -m couzhei@gmail.com -d 54.217.52.59.nip.io # 👈 Use nip.io for IP-based domains
+
 server {
-    listen 443 ssl;
-    server_name 54.217.52.59; # Replace with your server's public IP or domain
+    listen 443 ssl http2;
+    server_name 54.217.52.59;
 
-    ssl_certificate /home/ubuntu/code/formula-binance-atm/localhost.crt; # Path to your SSL certificate
-    ssl_certificate_key /home/ubuntu/code/formula-binance-atm/localhost.key; # Path to your SSL private key
+    # Use Let's Encrypt certificates instead of self-signed
+    # ssl_certificate /home/ubuntu/code/formula-binance-atm/PUBLIC.pem;
+    # ssl_certificate_key /home/ubuntu/code/formula-binance-atm/PRIVATE.key;
 
-    # Route API requests to FastAPI
+    ssl_certificate /home/ubuntu/code/formula-binance-atm/cert.pem;
+    ssl_certificate_key /home/ubuntu/code/formula-binance-atm/key.pem;
+    # ssl_certificate /home/ubuntu/code/formula-binance-atm/localhost.crt; # Path to your SSL certificate
+    # ssl_certificate_key /home/ubuntu/code/formula-binance-atm/localhost.key; # Path to your SSL private key
+    # Keep your existing SSL protocols and security headers
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers on;
+    ssl_ciphers EECDH+AESGCM:EDH+AESGCM;
+    ssl_ecdh_curve secp384r1;
+    ssl_session_cache shared:SSL:10m;
+    ssl_session_tickets off;
+
+    # Security headers (keep all existing)
+    add_header Strict-Transport-Security "max-age=63072000; includeSubDomains; preload";
+    add_header X-Content-Type-Options nosniff;
+    add_header X-Frame-Options DENY;
+    add_header X-XSS-Protection "1; mode=block";
+
+    # Telegram-specific fixes
+    add_header Content-Security-Policy "default-src 'self' https: data: blob: 'unsafe-inline' 'unsafe-eval'";
+    add_header Access-Control-Allow-Origin *;
+
+    # Modified API location block
     location /api/ {
-        proxy_pass https://localhost:8080/; # Note the trailing slash
-        proxy_ssl_verify off; 
+        proxy_pass https://localhost:8080/api/; # Keep /api/ in proxy_pass
+        proxy_ssl_verify off;
         proxy_http_version 1.1;
-        proxy_read_timeout 60;
-        proxy_connect_timeout 60;
-        proxy_redirect off;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
         proxy_set_header Host $host;
-        proxy_cache_bypass $http_upgrade;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
 
-        # CORS headers for FastAPI
-        add_header 'Access-Control-Allow-Origin' '*' always;
-        add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS, PUT, DELETE' always;
-        add_header 'Access-Control-Allow-Headers' 'Authorization, Content-Type' always;
-        add_header 'Access-Control-Allow-Credentials' 'true' always;
+        # Remove duplicate CORS headers
+        # (Keep only these)
+        add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS' always;
+        add_header 'Access-Control-Allow-Headers' 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range' always;
 
-        # Handle preflight requests
-        if ($request_method = OPTIONS) {
-            add_header 'Access-Control-Allow-Origin' '*';
-            add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS, PUT, DELETE';
-            add_header 'Access-Control-Allow-Headers' 'Authorization, Content-Type';
-            add_header 'Access-Control-Max-Age' 1728000; # Cache preflight response for 20 days
-            add_header 'Content-Type' 'text/plain; charset=utf-8';
-            add_header 'Content-Length' 0;
-            return 204;
-        }
-
-        # Rewrite the URL to remove the /api prefix
-        rewrite ^/api/(.*) /$1 break;
+        # Remove rewrite rule
+        # rewrite ^/api/(.*) /$1 break;
     }
 
-    # Route requests to Next.js
+    # Keep existing Next.js configuration
     location / {
         proxy_pass http://localhost:3000;
         proxy_http_version 1.1;
@@ -47,21 +59,26 @@ server {
         proxy_set_header Connection 'upgrade';
         proxy_set_header Host $host;
         proxy_cache_bypass $http_upgrade;
-
-        # CORS headers for Next.js
-        add_header 'Access-Control-Allow-Origin' '*' always;
-        add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS, PUT, DELETE' always;
-        add_header 'Access-Control-Allow-Headers' 'Authorization, Content-Type' always;
-        add_header 'Access-Control-Allow-Credentials' 'true' always;
     }
 }
 
 server {
     listen 80;
     server_name 54.217.52.59;
-
-    # Redirect HTTP to HTTPS
-    location / {
-        return 301 https://$host$request_uri;
-    }
+    return 301 https://$host$request_uri;
 }
+
+
+#### You can always debug with something minimal
+# /etc/nginx/sites-available/minimal.conf
+# server {
+#     listen 80;
+#     server_name 54.217.52.59;
+#     location / {
+#         return 200 "Hello, world!";
+#     }
+# }
+# Test it:
+# sudo nginx -t -c /etc/nginx/sites-available/minimal.conf
+# If this works, gradually add back your original configuration,
+# to find out about the culprit
