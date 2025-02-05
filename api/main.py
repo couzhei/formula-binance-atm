@@ -24,12 +24,12 @@ from strategiez.src_to_rafactor import (
 
 load_dotenv()
 
-app = FastAPI(root_path="/api") # the root path here is very important (why?)
+app = FastAPI() # the root path here is not very important (why?)
 # Because there are two services actually running through nginx (NextJS and FastAPI)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*", "https://54.217.52.59"],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -199,8 +199,8 @@ html = """
         </ul>
         <script>
             var ws = new WebSocket("wss://""" +\
-"54.217.52.59/" +\
-      """api/ws");
+      "chart-api.chickenkiller.com" +\
+      """/ws");
             ws.onmessage = function(event) {
                 var messages = document.getElementById('messages')
                 var message = document.createElement('li')
