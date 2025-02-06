@@ -1,0 +1,16 @@
+[Unit]
+Description=Next.js Frontend Service
+After=network.target
+
+[Service]
+User=ubuntu
+WorkingDirectory=/home/ubuntu/code/formula-binance-atm/frontend/my-app
+Environment="PATH=/home/ubuntu/.nvm/versions/node/v22.13.1/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+Environment="NODE_ENV=production"
+Environment="API_URL=https://54.217.52.59/api"
+ExecStart=/home/ubuntu/.nvm/versions/node/v22.13.1/bin/npm run start
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
