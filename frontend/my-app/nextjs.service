@@ -4,13 +4,21 @@ After=network.target
 
 [Service]
 User=ubuntu
+Group=ubuntu
 WorkingDirectory=/home/ubuntu/code/formula-binance-atm/frontend/my-app
-Environment="PATH=/home/ubuntu/.nvm/versions/node/v22.13.1/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+Environment="PATH=/home/ubuntu/.nvm/versions/node/v22.13.1/bin:/usr/bin:/bin"
 Environment="NODE_ENV=production"
-Environment="API_URL=https://54.217.52.59/api"
 ExecStart=/home/ubuntu/.nvm/versions/node/v22.13.1/bin/npm run start
 Restart=always
 RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=nextjs
+
+# Security hardening
+ProtectSystem=full
+NoNewPrivileges=true
+PrivateTmp=true
 
 [Install]
 WantedBy=multi-user.target
