@@ -24,7 +24,7 @@ from strategiez.src_to_rafactor import (
 
 load_dotenv()
 
-app = FastAPI() # the root path here is not very important (why?)
+app = FastAPI()  # the root path here is not very important (why?)
 # Because there are two services actually running through nginx (NextJS and FastAPI)
 
 app.add_middleware(
@@ -76,7 +76,10 @@ def get_historical_data():
         df, rsi_signals = calculate_indicator_signals(
             df, "RSI", {"length": 14}, detect_divergence=True
         )
-        buy_signals, sell_signals = generate_signals(df)
+        signals = generate_signals(df)
+
+        sma_window = 10
+        df[f"sma_{sma_window}"] = df.close.rolling(window=sma_window).mean()
 
         df = (
             df.select_dtypes(include=["float64", "int64"]).astype(str).combine_first(df)
@@ -84,8 +87,8 @@ def get_historical_data():
 
         return {
             "historical_data": df.to_dict(orient="records"),
-            "buy_signals": buy_signals,
-            "sell_signals": sell_signals,
+            "signals": signals,
+            "sma_param": sma_window,
         }
 
     except Exception as e:
@@ -183,7 +186,8 @@ def backtest(req: BacktestRequest):
     return {"final_balance": final_balance}
 
 
-html = """
+html = (
+    """
 <!DOCTYPE html>
 <html>
     <head>
@@ -198,9 +202,9 @@ html = """
         <ul id='messages'>
         </ul>
         <script>
-            var ws = new WebSocket("wss://""" +\
-      "chart-api.chickenkiller.com" +\
-      """/ws");
+            var ws = new WebSocket("wss://"""
+    + "chart-api.chickenkiller.com"
+    + """/ws");
             ws.onmessage = function(event) {
                 var messages = document.getElementById('messages')
                 var message = document.createElement('li')
@@ -218,6 +222,7 @@ html = """
     </body>
 </html>
 """
+)
 
 
 @app.get("/")

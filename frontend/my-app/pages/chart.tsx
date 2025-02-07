@@ -20,6 +20,7 @@ interface HistoricalData {
   low: number;
   close: number;
   volume: number;
+  [key: string]: number | string | undefined; // Dynamic key for SMA
 }
 
 interface Signal {
@@ -30,8 +31,8 @@ interface Signal {
 
 interface ApiResponse {
   historical_data: HistoricalData[];
-  buy_signals: Signal[];
-  sell_signals: Signal[];
+  signals: Signal[];
+  sma_param: number; // Add SMA parameter to the response interface
 }
 
 interface RealTimeData {
@@ -40,6 +41,7 @@ interface RealTimeData {
   high: number;
   low: number;
   close: number;
+  sma: number | null; // Add SMA field
   signal?: "BUY" | "SELL" | null;
 }
 
@@ -48,9 +50,8 @@ const ChartPage: React.FC = () => {
   const chart = useRef<IChartApi | undefined>(undefined);
   const candleSeries = useRef<ISeriesApi<"Candlestick"> | undefined>(undefined);
   const smaSeries = useRef<ISeriesApi<"Line"> | undefined>(undefined);
+  const lastProcessedInterval = useRef<number | null>(null); // Define lastProcessedInterval
   const [data, setData] = useState<ApiResponse | null>(null);
-  const lastProcessedInterval = useRef<number | null>(null);
-  const smaDataRef = useRef<LineData[]>([]);
 
   useEffect(() => {
     // Fetch initial historical data
@@ -115,48 +116,6 @@ const ChartPage: React.FC = () => {
 
       candleSeries.current.setData(candles);
 
-      // Calculate SMA with NaN for initial values
-      const smaWindowSize = 10;
-      const smaData: LineData[] = candles.map((point, index, array) => {
-        if (index < smaWindowSize - 1) return { time: point.time, value: NaN };
-        const sum = array
-          .slice(index - smaWindowSize + 1, index + 1)
-          .reduce((acc, curr) => acc + curr.close, 0);
-        return { time: point.time, value: sum / smaWindowSize };
-      });
-
-      smaSeries.current = chart.current.addLineSeries({
-        color: "rgb(27, 39, 129)",
-        lineWidth: 2,
-        lineStyle: LineStyle.Solid,
-      });
-
-      smaSeries.current.setData(smaData);
-      smaDataRef.current = smaData;
-
-      const markers: SeriesMarker<Time>[] = [
-        ...data.buy_signals.map((signal) => ({
-          time: (typeof signal.timestamp === "string"
-            ? parseInt(signal.timestamp, 10)
-            : signal.timestamp) as Time,
-          position: "belowBar" as const,
-          color: "green",
-          shape: "arrowUp" as const,
-          text: "BUY",
-        })),
-        ...data.sell_signals.map((signal) => ({
-          time: (typeof signal.timestamp === "string"
-            ? parseInt(signal.timestamp, 10)
-            : signal.timestamp) as Time,
-          position: "aboveBar" as const,
-          color: "red",
-          shape: "arrowDown" as const,
-          text: "SELL",
-        })),
-      ];
-
-      candleSeries.current.setMarkers(markers);
-
       // Set visible range to show last 50 candles
       if (candles.length >= 50) {
         chart.current.timeScale().setVisibleRange({
@@ -167,9 +126,38 @@ const ChartPage: React.FC = () => {
         chart.current.timeScale().fitContent();
       }
 
+      // Add SMA series
+      smaSeries.current = chart.current.addLineSeries({
+        color: "rgb(27, 39, 129)",
+        lineWidth: 2,
+        lineStyle: LineStyle.Dashed,
+      });
+
+      // Set SMA data
+      const smaKey = `sma_${data.sma_param}`;
+      const smaData: LineData[] = data.historical_data.map((item) => ({
+        time: typeof item.timestamp === "string" ? parseInt(item.timestamp, 10) : item.timestamp as Time,
+        value: item[smaKey] !== null ? Number(item[smaKey]) : NaN,
+      }));
+
+      smaSeries.current.setData(smaData);
+
+      const markers: SeriesMarker<Time>[] = data.signals.map((signal) => ({
+        time: (typeof signal.timestamp === "string"
+          ? parseInt(signal.timestamp, 10)
+          : signal.timestamp) as Time,
+        position: signal.type === "BUY" ? "belowBar" : "aboveBar",
+        color: signal.type === "BUY" ? "green" : "red",
+        shape: signal.type === "BUY" ? "arrowUp" : "arrowDown",
+        text: signal.type,
+      }));
+
+      candleSeries.current.setMarkers(markers);
+
       // Initialize WebSocket for real-time data
+      const webSocketUrl = backendUrl.replace("http://", "")
       const socket = new WebSocket(
-        `wss://${backendUrl.replace("https://", "")}/ws/kucoin`
+        `ws://${webSocketUrl.replace("https://", "")}/ws/kucoin`
       );
 
       socket.onmessage = (event) => {
@@ -201,23 +189,21 @@ const ChartPage: React.FC = () => {
           });
 
           // Update SMA data in the temporary array
-          const newSmaData = [...smaDataRef.current];
+          const newSmaData = [...smaData];
           newSmaData.push({
             time: timestamp as Time,
             value: realTimeData.close,
           });
 
-          if (newSmaData.length > smaWindowSize) {
+          if (newSmaData.length > data.sma_param) {
             const sum = newSmaData
-              .slice(-smaWindowSize)
+              .slice(-data.sma_param)
               .reduce((acc, curr) => acc + curr.value, 0);
-            const smaValue = sum / smaWindowSize;
+            const smaValue = sum / data.sma_param;
             newSmaData[newSmaData.length - 1].value = smaValue;
           } else {
             newSmaData[newSmaData.length - 1].value = NaN;
           }
-
-          smaDataRef.current = newSmaData;
 
           // Check if we have moved to a new interval
           if (

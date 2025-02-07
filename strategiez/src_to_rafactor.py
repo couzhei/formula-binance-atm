@@ -66,24 +66,39 @@ def calculate_indicator_signals(
 def generate_signals(df):
     # Ensure datetime is in Unix time format
     df["datetime"] = pd.to_datetime(df["timestamp"]).astype(int) // 10**9
-    buy_signals = []
-    sell_signals = []
 
-    for i in range(len(df)):
-        if i < 1:
-            continue
-        rsi_value = df.get("RSI", [None])[i]
-        macd_hist = df.get("MACD_hist", [None])[i]
+    # for i in range(len(df)):
+    #     if i < 1:
+    #         continue
+    #     rsi_value = df.get("RSI", [None])[i]
+    #     macd_hist = df.get("MACD_hist", [None])[i]
 
-        if rsi_value is not None and macd_hist is not None:
-            if rsi_value < 30 and macd_hist > 0:
-                buy_signals.append((df["datetime"].iloc[i], df["close"].iloc[i], "BUY"))
-            elif rsi_value > 70 and macd_hist < 0:
-                sell_signals.append(
-                    (df["datetime"].iloc[i], df["close"].iloc[i], "SELL")
-                )
-
-    return buy_signals, sell_signals
+    #     if rsi_value is not None and macd_hist is not None:
+    #         if rsi_value < 30 and macd_hist > 0:
+    #             buy_signals.append((df["datetime"].iloc[i], df["close"].iloc[i], "BUY"))
+    #         elif rsi_value > 70 and macd_hist < 0:
+    #             sell_signals.append(
+    #                 (df["datetime"].iloc[i], df["close"].iloc[i], "SELL")
+    #             )
+    #### PAY ATTENTION TO THE FORMAT!!!
+    # interface Signal {
+    # timestamp: number; // Unix timestamp in seconds
+    # price: number;
+    # type: "BUY" | "SELL";
+    # }
+    test_signal = [
+        {
+            "timestamp": df["timestamp"].iloc[-2],
+            "price": df["close"].iloc[-2],
+            "type": "BUY",
+        },
+        {
+            "timestamp": df["timestamp"].iloc[-1],
+            "price": df["close"].iloc[-1],
+            "type": "SELL",
+        },
+    ]
+    return test_signal
 
 
 def backtest_signals(df, buy_signals, sell_signals, initial_balance=10000):
