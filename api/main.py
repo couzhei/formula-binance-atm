@@ -62,7 +62,7 @@ class BacktestRequest(BaseModel):
 def get_historical_data():
     try:
         # df = get_historical_klines(interval="1m", limit=50)
-        df = get_historical_klines_from_kucoin(interval="1m", limit=50)
+        df = get_historical_klines_from_kucoin(interval="1m", limit=500)
 
         df = df.sort_values(by="timestamp", ascending=True)
 
@@ -78,7 +78,7 @@ def get_historical_data():
         )
         signals = generate_signals(df)
 
-        sma_window = 10
+        sma_window = 50
         df[f"sma_{sma_window}"] = df.close.rolling(window=sma_window).mean()
 
         df = (
@@ -153,7 +153,7 @@ async def websocket_kucoin_endpoint(websocket: WebSocket):
         # Don't be harsh on yourself, you're just starting, bro!
 
         # Get last 10 candles for SMA calculation
-        historical_df = get_historical_klines_from_kucoin(interval="1m", limit=10)
+        historical_df = get_historical_klines_from_kucoin(interval="1m", limit=50)
         historical_closes = historical_df["close"].tolist()
         historical_highs = historical_df["high"].iloc[-3:].tolist()
         historical_lows = historical_df["low"].iloc[-3:].tolist()
@@ -176,11 +176,14 @@ async def websocket_kucoin_endpoint(websocket: WebSocket):
                 historical_highs.pop(0)
                 historical_lows.pop(0)
                 current_sma = sum(historical_closes) / len(historical_closes)
-                if candle["close"] > current_sma and current_sma > candle["open"]:
-                    if all(current_sma > high for high in historical_highs):
+                if candle["high"] > current_sma and current_sma > candle["low"]:
+                    if current_sma < candle["close"] and all(
+                        current_sma > high for high in historical_highs
+                    ):
                         signal = "BUY"
-                elif candle["close"] < current_sma and current_sma < candle["open"]:
-                    if all(current_sma < low for low in historical_lows):
+                    elif current_sma > candle["close"] and all(
+                        current_sma < low for low in historical_lows
+                    ):
                         signal = "SELL"
 
             real_time_data = {

@@ -39,7 +39,7 @@ def calculate_indicator_signals(df, indicator_name, variables, detect_divergence
         signals["last_value"] = df["RSI"].iloc[-1]
         # ...existing code...
     elif indicator_name == "SMA":
-        df[f'SMA_{variables.get("period", 21)}'] = calculate_sma(
+        df[f"SMA_{variables.get('period', 21)}"] = calculate_sma(
             df,
             period=variables.get("period", 21),
         )
