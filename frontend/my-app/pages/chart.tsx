@@ -47,9 +47,9 @@ interface RealTimeData {
 
 const ChartPage: React.FC = () => {
   const chartRef = useRef<HTMLDivElement>(null);
-  const chart = useRef<IChartApi>();
-  const candleSeries = useRef<ISeriesApi<"Candlestick">>();
-  const smaSeries = useRef<ISeriesApi<"Line">>();
+  const chart = useRef<IChartApi | null>(null);
+  const candleSeries = useRef<ISeriesApi<"Candlestick"> | null>(null);
+  const smaSeries = useRef<ISeriesApi<"Line"> | null>(null);
   const [data, setData] = useState<ApiResponse | null>(null);
   const smaData = useRef<LineData[]>([]);
   const pendingSma = useRef<LineData | null>(null);
@@ -63,9 +63,11 @@ const ChartPage: React.FC = () => {
         const historicalSma = apiData.historical_data
           .map((item) => ({
             time:
-              typeof item.timestamp === "string"
-                ? parseInt(item.timestamp, 10)
-                : item.timestamp,
+              (
+                typeof item.timestamp === "string"
+                  ? parseInt(item.timestamp, 10)
+                  : item.timestamp
+              ).toString(),
             value: Number(item[smaKey]),
           }))
           .filter((point) => !isNaN(point.value));
@@ -83,7 +85,7 @@ const ChartPage: React.FC = () => {
       grid: { vertLines: { color: "#eee" }, horzLines: { color: "#eee" } },
       timeScale: {
         timeVisible: true,
-        tickMarkFormatter: (time) =>
+        tickMarkFormatter: (time: number) =>
           new Date(time * 1000).toLocaleTimeString(),
       },
     });
@@ -98,9 +100,11 @@ const ChartPage: React.FC = () => {
     const candles: CandlestickData<Time>[] = data.historical_data.map(
       (item) => ({
         time:
-          typeof item.timestamp === "string"
-            ? parseInt(item.timestamp, 10)
-            : item.timestamp,
+          (
+            typeof item.timestamp === "string"
+              ? parseInt(item.timestamp, 10)
+              : item.timestamp
+          ).toString(),
         open: Number(item.open),
         high: Number(item.high),
         low: Number(item.low),
