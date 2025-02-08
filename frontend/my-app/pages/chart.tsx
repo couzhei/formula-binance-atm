@@ -67,7 +67,7 @@ const ChartPage: React.FC = () => {
                 typeof item.timestamp === "string"
                   ? parseInt(item.timestamp, 10)
                   : item.timestamp
-              ).toString(),
+              ) as unknown as Time,
             value: Number(item[smaKey]),
           }))
           .filter((point) => !isNaN(point.value));
@@ -99,12 +99,9 @@ const ChartPage: React.FC = () => {
 
     const candles: CandlestickData<Time>[] = data.historical_data.map(
       (item) => ({
-        time:
-          (
-            typeof item.timestamp === "string"
-              ? parseInt(item.timestamp, 10)
-              : item.timestamp
-          ).toString(),
+        time: (typeof item.timestamp === "string"
+          ? parseInt(item.timestamp, 10)
+          : item.timestamp) as unknown as Time,
         open: Number(item.open),
         high: Number(item.high),
         low: Number(item.low),
