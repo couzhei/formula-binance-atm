@@ -82,7 +82,7 @@ async def get_kucoin_candles(symbol="BTC-USDT", interval="1min"):
 
 
 def get_historical_klines_from_kucoin(
-    interval: str = "1m",
+    interval: str = "1min",
     limit: int = 30,
     symbol: str = "BTCUSDT",
 ) -> pd.DataFrame:
@@ -94,8 +94,8 @@ def get_historical_klines_from_kucoin(
     ----------
     interval : str, optional
         The interval between klines. Valid values:
-        1m, 3m, 5m, 15m, 30m, 1h, 2h, 4h, 6h, 8h, 12h, 1d, 1w, 1M
-        Default is "1m"
+        1min, 3min, 5min, 15min, 30min, 1hour, 2hour, 4hour, 6hour, 8hour, 12hour, 1day, 1week, 1month
+        dayefault is "1m"
     limit : int, optional
         Number of klines to retrieve. Default is 30
     symbol : str, optional
@@ -116,21 +116,22 @@ def get_historical_klines_from_kucoin(
     All price and volume values are converted to float64 type.
     """
 
+    print(interval)
     interval_mapping = {
-        "1m": 60,
-        "3m": 180,
-        "5m": 300,
-        "15m": 900,
-        "30m": 1800,
-        "1h": 3600,
-        "2h": 7200,
-        "4h": 14400,
-        "6h": 21600,
-        "8h": 28800,
-        "12h": 43200,
-        "1d": 86400,
-        "1w": 604800,
-        "1M": 2592000,  # Approximation
+        "1min": 60,
+        "3min": 180,
+        "5min": 300,
+        "15min": 900,
+        "30min": 1800,
+        "1hour": 3600,
+        "2hour": 7200,
+        "4hour": 14400,
+        "6hour": 21600,
+        "8hour": 28800,
+        "12hour": 43200,
+        "1day": 86400,
+        "1week": 604800,
+        "1month": 2592000,  # Approximation
     }
 
     if interval not in interval_mapping:
@@ -140,34 +141,14 @@ def get_historical_klines_from_kucoin(
     end_at = int(time.time())
     start_at = end_at - (limit * interval_mapping[interval])
 
-    # Map Binance intervals to KuCoin intervals
-    kucoin_interval_mapping = {
-        "1m": "1min",
-        "3m": "3min",
-        "5m": "5min",
-        "15m": "15min",
-        "30m": "30min",
-        "1h": "1hour",
-        "2h": "2hour",
-        "4h": "4hour",
-        "6h": "6hour",
-        "8h": "8hour",
-        "12h": "12hour",
-        "1d": "1day",
-        "1w": "1week",
-        "1M": "1month",
-    }
-
-    if interval not in kucoin_interval_mapping:
-        raise ValueError("Invalid interval")
-    interval = kucoin_interval_mapping[interval]
-
     if symbol == "BTCUSDT":
         symbol = "BTC-USDT"
 
     response = requests.get(
         f"https://api.kucoin.com/api/v1/market/candles?type={interval}"
-        f"&symbol={symbol}&startAt={start_at}&endAt={end_at}"
+        f"&symbol={symbol}&startAt={start_at}&endAt={end_at}",
+        timeout=10,
+        # retries=3,
     )
 
     if response.status_code != 200:

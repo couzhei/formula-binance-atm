@@ -1,5 +1,7 @@
 import pandas as pd
 
+from strategiez.indicators import calculate_sma
+
 
 def calculate_indicator_signals(
     df: pd.DataFrame, indicator_name, variables, detect_divergence=False
@@ -63,9 +65,11 @@ def calculate_indicator_signals(
     return df, signals
 
 
-def generate_signals(df):
+def generate_signals(
+    df,
+    settings=None,  # : Settings, type hinting creates circular import
+):
     # Ensure datetime is in Unix time format
-    df["datetime"] = pd.to_datetime(df["timestamp"]).astype(int) // 10**9
 
     # for i in range(len(df)):
     #     if i < 1:
@@ -84,21 +88,72 @@ def generate_signals(df):
     # interface Signal {
     # timestamp: number; // Unix timestamp in seconds
     # price: number;
-    # type: "BUY" | "SELL";
+    # type: "BUY" | "SELL"; # aka SIDE
     # }
-    test_signal = [
-        # {
-        #     "timestamp": df["timestamp"].iloc[-2],
-        #     "price": df["close"].iloc[-2],
-        #     "type": "BUY",
-        # },
-        # {
-        #     "timestamp": df["timestamp"].iloc[-1],
-        #     "price": df["close"].iloc[-1],
-        #     "type": "SELL",
-        # },
-    ]
-    return test_signal
+    # signal = None
+    # if is_final:
+    #     historical_closes.append(candle["close"])
+    #     historical_highs.append(candle["high"])
+    #     historical_lows.append(candle["low"])
+    #     historical_closes.pop(0)
+    #     historical_highs.pop(0)
+    #     historical_lows.pop(0)
+    #     current_sma = sum(historical_closes) / len(historical_closes)
+    #     if candle["high"] > current_sma and current_sma > candle["low"]:
+    #         if current_sma < candle["close"] and all(
+    #             current_sma > high for high in historical_highs
+    #         ):
+    #             signal = "BUY"
+    #         elif current_sma > candle["close"] and all(
+    #             current_sma < low for low in historical_lows
+    #         ):
+    #             signal = "SELL"
+
+    sma_window = settings.sma_window if settings else 50
+    df["sma"] = calculate_sma(df, sma_window)
+
+    # Main condition: current high above sma and low below sma
+    main_cond = (df["high"] > df["sma"]) & (df["low"] < df["sma"])
+
+    # For rolling window conditions, shift by 1 to exclude current row.
+    # BUY condition: sma.<close AND all previous 3 sma > previous 3 high
+    sma_prev_min = df["sma"].shift(1).rolling(window=3, min_periods=3).min()
+    high_prev_max = df["high"].shift(1).rolling(window=3, min_periods=3).max()
+    buy_cond = (df["sma"] < df["close"]) & (sma_prev_min > high_prev_max)
+
+    # SELL condition: sma > close AND all previous 3 sma < previous 3 low
+    sma_prev_max = df["sma"].shift(1).rolling(window=3, min_periods=3).max()
+    low_prev_min = df["low"].shift(1).rolling(window=3, min_periods=3).min()
+    sell_cond = (df["sma"] > df["close"]) & (sma_prev_max < low_prev_min)
+
+    # Combine with the overall main condition
+    buy_signals = main_cond & buy_cond
+    sell_signals = main_cond & sell_cond
+
+    # Create a signals list of dictionaries
+    signals = []
+    # We use .loc to filter rows where signals occur.
+    for idx, row in df.loc[buy_signals].iterrows():
+        signals.append(
+            {
+                "timestamp": float(row["timestamp"]),
+                "price": row["close"],
+                "type": "BUY",
+            }
+        )
+
+    for idx, row in df.loc[sell_signals].iterrows():
+        signals.append(
+            {
+                "timestamp": float(row["timestamp"]),
+                "price": row["close"],
+                "type": "SELL",
+            }
+        )
+
+    # Optionally, sort signals by timestamp:
+    signals.sort(key=lambda x: x["timestamp"])
+    return signals
 
 
 def backtest_signals(df, buy_signals, sell_signals, initial_balance=10000):

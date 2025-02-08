@@ -20,7 +20,7 @@ def calculate_rsi(df, length):
 
 
 def calculate_sma(df, period: int) -> pd.DataFrame:
-    return df["Close"].rolling(window=period).mean()
+    return df["close"].rolling(window=period).mean()
 
 
 def calculate_indicator_signals(df, indicator_name, variables, detect_divergence=False):

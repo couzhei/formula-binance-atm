@@ -1,6 +1,6 @@
 import {
   Time,
-  // CandlestickData,
+  CandlestickData,
   LineStyle,
   createChart,
   IChartApi,
@@ -10,8 +10,7 @@ import {
 } from "lightweight-charts";
 import { useEffect, useRef, useState } from "react";
 
-const backendUrl =
-  process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8001";
+const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8001";
 
 interface HistoricalData {
   timestamp: number;
@@ -48,133 +47,143 @@ interface RealTimeData {
 
 const ChartPage: React.FC = () => {
   const chartRef = useRef<HTMLDivElement>(null);
-  const chart = useRef<IChartApi | undefined>(undefined);
-  const candleSeries = useRef<ISeriesApi<"Candlestick"> | undefined>(undefined);
-  const smaSeries = useRef<ISeriesApi<"Line"> | undefined>(undefined);
+  const chart = useRef<IChartApi>();
+  const candleSeries = useRef<ISeriesApi<"Candlestick">>();
+  const smaSeries = useRef<ISeriesApi<"Line">>();
   const [data, setData] = useState<ApiResponse | null>(null);
-  const [smaData, setSmaData] = useState<LineData[]>([]);
+  const smaData = useRef<LineData[]>([]);
+  const pendingSma = useRef<LineData | null>(null);
 
   useEffect(() => {
-    if (chartRef.current && data && !chart.current) {
-      chart.current = createChart(chartRef.current, {
-        width: 800,
-        height: 600,
-        layout: {
-          background: { color: "#ffffff" },
-          textColor: "#333333",
-        },
-        grid: {
-          vertLines: { color: "#eeeeee" },
-          horzLines: { color: "#eeeeee" },
-        },
-        timeScale: {
-          timeVisible: true,
-          secondsVisible: false,
-          tickMarkFormatter: (time: number) => {
-            const date = new Date(time * 1000);
-            return date.toLocaleTimeString();
-          },
-        },
+    fetch(`${backendUrl}/historical_data`)
+      .then((res) => res.json())
+      .then((apiData: ApiResponse) => {
+        setData(apiData);
+        const smaKey = `sma_${apiData.sma_param}`;
+        const historicalSma = apiData.historical_data
+          .map((item) => ({
+            time:
+              typeof item.timestamp === "string"
+                ? parseInt(item.timestamp, 10)
+                : item.timestamp,
+            value: Number(item[smaKey]),
+          }))
+          .filter((point) => !isNaN(point.value));
+        smaData.current = historicalSma;
       });
+  }, []);
 
-      candleSeries.current = chart.current.addCandlestickSeries();
-      smaSeries.current = chart.current.addLineSeries({
-        color: "rgb(27, 39, 129)",
-        lineWidth: 2,
-        lineStyle: LineStyle.Dashed,
-      });
+  useEffect(() => {
+    if (!chartRef.current || !data) return;
 
-      const candles = data.historical_data.map((item: HistoricalData) => ({
-        time: (typeof item.timestamp === "string" ? parseInt(item.timestamp, 10) : item.timestamp) as Time,
+    chart.current = createChart(chartRef.current, {
+      width: 800,
+      height: 600,
+      layout: { background: { color: "#fff" }, textColor: "#333" },
+      grid: { vertLines: { color: "#eee" }, horzLines: { color: "#eee" } },
+      timeScale: {
+        timeVisible: true,
+        tickMarkFormatter: (time) =>
+          new Date(time * 1000).toLocaleTimeString(),
+      },
+    });
+
+    candleSeries.current = chart.current.addCandlestickSeries();
+    smaSeries.current = chart.current.addLineSeries({
+      color: "#1b2781",
+      lineWidth: 2,
+      lineStyle: LineStyle.Dashed,
+    });
+
+    const candles: CandlestickData<Time>[] = data.historical_data.map(
+      (item) => ({
+        time:
+          typeof item.timestamp === "string"
+            ? parseInt(item.timestamp, 10)
+            : item.timestamp,
         open: Number(item.open),
         high: Number(item.high),
         low: Number(item.low),
         close: Number(item.close),
+      })
+    );
+    candleSeries.current.setData(candles);
+    smaSeries.current.setData(smaData.current);
+
+    // NEW: Set initial markers from backend signals, if any.
+    if (data.signals && data.signals.length > 0) {
+      const markers: SeriesMarker<Time>[] = data.signals.map((signal) => ({
+        time: signal.timestamp as unknown as Time,
+        position: signal.type === "BUY" ? "belowBar" : "aboveBar",
+        color: signal.type === "BUY" ? "#00ff00" : "#ff0000",
+        shape: signal.type === "BUY" ? "arrowUp" : "arrowDown",
+        text: signal.type,
       }));
+      candleSeries.current.setMarkers(markers);
+    }
 
-      candleSeries.current.setData(candles);
+    const wsProtocol = backendUrl.startsWith("https") ? "wss://" : "ws://";
+    const wsUrl =
+      wsProtocol + backendUrl.replace(/https?:\/\//, "") + "/ws/kucoin";
+    const ws = new WebSocket(wsUrl);
 
-      if (candles.length >= 50) {
-        chart.current.timeScale().setVisibleRange({
-          from: candles[candles.length - 50].time,
-          to: candles[candles.length - 1].time,
-        });
-      } else {
-        chart.current.timeScale().fitContent();
-      }
+    ws.onmessage = (e) => {
+      const realTimeData: RealTimeData = JSON.parse(e.data);
+      // Compute timestamp and convert to string for a proper Time format.
+      const timestamp = Math.floor(realTimeData.time);
+      const timeVal = timestamp.toString() as Time;
 
-      smaSeries.current.setData(smaData);
+      candleSeries.current?.update({
+        time: timeVal,
+        open: realTimeData.open,
+        high: realTimeData.high,
+        low: realTimeData.low,
+        close: realTimeData.close,
+      });
 
-      const webSocketUrl = backendUrl.replace("http://", "");
-      const socket = new WebSocket(`wss://${webSocketUrl.replace("https://", "")}/ws/kucoin`);
-
-      socket.onmessage = (event) => {
-        const realTimeData: RealTimeData = JSON.parse(event.data);
-        console.log("Received data:", realTimeData);
-
-        const timestamp = Math.floor(
-          typeof realTimeData.time === "string" ? parseInt(realTimeData.time, 10) : realTimeData.time
-        );
-
-        candleSeries.current?.update({
-          time: timestamp as Time,
-          open: realTimeData.open,
-          high: realTimeData.high,
-          low: realTimeData.low,
-          close: realTimeData.close,
-        });
-
-        if (realTimeData.is_final && realTimeData.sma !== null) {
-          const newSmaPoint = {
-            time: timestamp as Time,
+      if (realTimeData.sma !== null && !isNaN(realTimeData.sma)) {
+        if (realTimeData.is_final) {
+          if (pendingSma.current) {
+            smaData.current = [...smaData.current, pendingSma.current];
+            pendingSma.current = null;
+          }
+          const newPoint = {
+            time: timeVal,
             value: realTimeData.sma,
           };
-
-          setSmaData((prev) => {
-            const updated = [...prev, newSmaPoint];
-            if (data.sma_param && updated.length > data.sma_param) {
-              updated.shift();
-            }
-            smaSeries.current?.setData(updated);
-            return updated;
-          });
-
-          if (realTimeData.signal) {
-            const marker: SeriesMarker<Time> = {
-              time: timestamp as Time,
-              position: realTimeData.signal === "BUY" ? "belowBar" : "aboveBar",
-              color: realTimeData.signal === "BUY" ? "green" : "red",
-              shape: realTimeData.signal === "BUY" ? "arrowUp" : "arrowDown",
-              text: realTimeData.signal,
-            };
-            const existingMarkers = candleSeries.current?.markers() || [];
-            existingMarkers.push(marker);
-            candleSeries.current?.setMarkers(existingMarkers);
+          smaData.current = [...smaData.current, newPoint];
+          if (smaData.current.length > data.sma_param) {
+            smaData.current.shift();
           }
+          smaSeries.current?.setData(smaData.current);
+        } else {
+          pendingSma.current = {
+            time: timeVal,
+            value: realTimeData.sma,
+          };
         }
-      };
+      }
 
-      return () => {
-        socket.close();
-        chart.current?.remove();
-      };
-    }
-  }, [data, smaData]);
+      if (realTimeData.signal) {
+        const markers = candleSeries.current?.markers() || [];
+        // Use timeVal for marker's time
+        markers.push({
+          time: timeVal,
+          position: realTimeData.signal === "BUY" ? "belowBar" : "aboveBar",
+          color: realTimeData.signal === "BUY" ? "#00ff00" : "#ff0000",
+          shape:
+            realTimeData.signal === "BUY" ? "arrowUp" : "arrowDown",
+          text: realTimeData.signal,
+        });
+        candleSeries.current?.setMarkers(markers);
+      }
+    };
 
-  useEffect(() => {
-    fetch(`${backendUrl}/historical_data`)
-      .then((response) => response.json())
-      .then((apiData) => {
-        setData(apiData);
-        const smaKey = `sma_${apiData.sma_param}`;
-        const initialSma = apiData.historical_data.map((item: HistoricalData) => ({
-          time: (typeof item.timestamp === "string" ? parseInt(item.timestamp, 10) : item.timestamp) as Time,
-          value: item[smaKey] !== null ? Number(item[smaKey]) : NaN,
-        }));
-        setSmaData(initialSma);
-      })
-      .catch((error) => console.error("Error fetching data:", error));
-  }, []);
+    return () => {
+      ws.close();
+      chart.current?.remove();
+    };
+  }, [data]);
 
   return <div ref={chartRef} />;
 };

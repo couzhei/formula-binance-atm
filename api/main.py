@@ -2,13 +2,14 @@ import asyncio
 import os
 from datetime import datetime
 from random import uniform
+from typing import List
 
 import pandas as pd
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import Depends, FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from binance_api import (
     get_binance_candles,
@@ -58,11 +59,62 @@ class BacktestRequest(BaseModel):
     initial_balance: float = 10000.0
 
 
+# Define your settings model
+class Settings(BaseModel):
+    symbol: str = Field(..., example="BTC-USDT")
+    interval: str = Field(..., example="1min")
+    limit: int = Field(..., example=1000)
+    strategies: List[str] = Field(..., example=["smacrossprice"])
+    sma_window: int = Field(..., example=21)
+    side: str = Field(..., example="LONG")
+    api: str = Field(..., example="kucoin")
+
+
+# Initialize settings in app.state on startup
+@app.on_event("startup")
+def startup_event():
+    # initial settings; adjust as needed
+    app.state.settings = Settings(
+        symbol="BTC-USDT",
+        interval="1min",
+        limit=1000,
+        strategies=[
+            "smacrossprice",
+            # "rsi",
+            # "macd",
+        ],
+        sma_window=21,  # TODO: This should be a list
+        side="LONG",
+        api="kucoin",
+    )
+
+
+# Dependency that returns the settings
+def get_settings() -> Settings:
+    return app.state.settings
+
+
+# Endpoint to retrieve settings using DI
+@app.get("/settings")
+def read_settings(settings: Settings = Depends(get_settings)):
+    return settings
+
+
+# Endpoint to update the settings using DI
+@app.post("/settings")
+def update_settings(new_settings: Settings):
+    app.state.settings = new_settings
+    return {"message": "Settings updated successfully"}
+
+
 @app.get("/historical_data")
-def get_historical_data():
+def get_historical_data(settings: Settings = Depends(get_settings)):
     try:
         # df = get_historical_klines(interval="1m", limit=50)
-        df = get_historical_klines_from_kucoin(interval="1m", limit=500)
+        # TODO interval = "1m" or "1min"
+        df = get_historical_klines_from_kucoin(
+            interval=settings.interval, limit=settings.limit
+        )
 
         df = df.sort_values(by="timestamp", ascending=True)
 
@@ -76,9 +128,17 @@ def get_historical_data():
         df, rsi_signals = calculate_indicator_signals(
             df, "RSI", {"length": 14}, detect_divergence=True
         )
-        signals = generate_signals(df)
+        if settings.strategies:
+            # TODO: This should get outside of here not in the "views"
+            # for strategy in settings.strategies:
+            #     if strategy == "smacrossprice":
+            #         df, sma_signals = calculate_indicator_signals(
+            #             df, "SMA", {"period": settings.sma_window}, detect_divergence=True
+            #         )
+            signals = generate_signals(df, settings)
 
-        sma_window = 50
+        # TODO: Harcoded SMA Parameter and calculation
+        sma_window = settings.sma_window
         df[f"sma_{sma_window}"] = df.close.rolling(window=sma_window).mean()
 
         df = (
@@ -87,6 +147,7 @@ def get_historical_data():
 
         return {
             "historical_data": df.to_dict(orient="records"),
+            "number_of_rows": len(df),
             "signals": signals,
             "sma_param": sma_window,
         }
@@ -97,6 +158,7 @@ def get_historical_data():
 
 @app.post("/calculate")
 def calculate(req: CalculateRequest):
+    """Calculate indicator signals based on the given price data and indicator name"""
     df = pd.DataFrame(req.price_data)
 
     # Ensure datetime is in Unix time format
@@ -115,7 +177,9 @@ def calculate(req: CalculateRequest):
 
 
 @app.websocket("/ws/data")
-async def websocket_endpoint(websocket: WebSocket):
+async def websocket_endpoint(
+    websocket: WebSocket, settings: Settings = Depends(get_settings)
+):
     await websocket.accept()
     try:
         async for candle in get_binance_candles(
@@ -142,7 +206,9 @@ async def websocket_endpoint(websocket: WebSocket):
 
 
 @app.websocket("/ws/kucoin")
-async def websocket_kucoin_endpoint(websocket: WebSocket):
+async def websocket_kucoin_endpoint(
+    websocket: WebSocket, settings: Settings = Depends(get_settings)
+):
     await websocket.accept()
     try:
         # TODO: The principle of Separation of Concerns are not strictly followed here
@@ -163,8 +229,8 @@ async def websocket_kucoin_endpoint(websocket: WebSocket):
             else None
         )
         async for candle in get_kucoin_candles(
-            symbol="BTC-USDT",
-            interval="1min",
+            symbol=settings.symbol,
+            interval=settings.interval,
         ):
             is_final = candle["is_final"]
             signal = None
@@ -205,8 +271,8 @@ async def websocket_kucoin_endpoint(websocket: WebSocket):
 @app.post("/generate_signals")
 def generate(req: GenerateRequest):
     df = pd.DataFrame(req.price_data)
-    buy_signals, sell_signals = generate_signals(df)
-    return {"buy_signals": buy_signals, "sell_signals": sell_signals}
+    signals = generate_signals(df)
+    return {"signals": signals}
 
 
 @app.post("/backtest")
