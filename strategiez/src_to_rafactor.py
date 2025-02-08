@@ -87,16 +87,16 @@ def generate_signals(df):
     # type: "BUY" | "SELL";
     # }
     test_signal = [
-        {
-            "timestamp": df["timestamp"].iloc[-2],
-            "price": df["close"].iloc[-2],
-            "type": "BUY",
-        },
-        {
-            "timestamp": df["timestamp"].iloc[-1],
-            "price": df["close"].iloc[-1],
-            "type": "SELL",
-        },
+        # {
+        #     "timestamp": df["timestamp"].iloc[-2],
+        #     "price": df["close"].iloc[-2],
+        #     "type": "BUY",
+        # },
+        # {
+        #     "timestamp": df["timestamp"].iloc[-1],
+        #     "price": df["close"].iloc[-1],
+        #     "type": "SELL",
+        # },
     ]
     return test_signal
 

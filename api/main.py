@@ -145,23 +145,52 @@ async def websocket_endpoint(websocket: WebSocket):
 async def websocket_kucoin_endpoint(websocket: WebSocket):
     await websocket.accept()
     try:
+        # TODO: The principle of Separation of Concerns are not strictly followed here
+        # What if it was a different interval?
+        # What if it was a different strategy?
+        # What if it was a different SMA Parameter?
+        # Also everything is shitty and hard-coded here!
+        # Don't be harsh on yourself, you're just starting, bro!
+
+        # Get last 10 candles for SMA calculation
+        historical_df = get_historical_klines_from_kucoin(interval="1m", limit=10)
+        historical_closes = historical_df["close"].tolist()
+        historical_highs = historical_df["high"].iloc[-3:].tolist()
+        historical_lows = historical_df["low"].iloc[-3:].tolist()
+        current_sma = (
+            sum(historical_closes) / len(historical_closes)
+            if historical_closes
+            else None
+        )
         async for candle in get_kucoin_candles(
             symbol="BTC-USDT",
             interval="1min",
         ):
+            is_final = candle["is_final"]
+            signal = None
+            if is_final:
+                historical_closes.append(candle["close"])
+                historical_highs.append(candle["high"])
+                historical_lows.append(candle["low"])
+                historical_closes.pop(0)
+                historical_highs.pop(0)
+                historical_lows.pop(0)
+                current_sma = sum(historical_closes) / len(historical_closes)
+                if candle["close"] > current_sma and current_sma > candle["open"]:
+                    if all(current_sma > high for high in historical_highs):
+                        signal = "BUY"
+                elif candle["close"] < current_sma and current_sma < candle["open"]:
+                    if all(current_sma < low for low in historical_lows):
+                        signal = "SELL"
+
             real_time_data = {
                 "time": candle["time"],
                 "open": candle["open"],
                 "high": candle["high"],
                 "low": candle["low"],
                 "close": candle["close"],
-                "signal": (
-                    "BUY"
-                    if candle["close"] > candle["open"]
-                    else "SELL"
-                    if candle["close"] < candle["open"]
-                    else None
-                ),
+                "sma": current_sma,
+                "signal": signal,
             }
             await websocket.send_json(real_time_data)
     except WebSocketDisconnect:

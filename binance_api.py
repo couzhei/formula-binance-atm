@@ -49,12 +49,25 @@ async def get_kucoin_candles(symbol="BTC-USDT", interval="1min"):
         ack_message = await websocket.recv()
         print("Ack message:", ack_message)
 
+        fixed_minute = None  # Track the minute timestamp of the latest finalized candle
         # Process incoming K-Line data
         while True:
             response = await websocket.recv()
             data = json.loads(response)
             if data["type"] == "message" and data["subject"] == "trade.candles.update":
                 kline_data = data["data"]["candles"]
+                current_time = int(kline_data[0])
+                # Floor the timestamp to the minute
+                minute_timestamp = current_time - (current_time % 60)
+                is_final = False
+
+                # TODO: The principle of Separation of Concerns are not strictly followed here
+                # What if it was a different interval?
+                # Mark as final only if the floored minute has advanced
+                if fixed_minute is None or minute_timestamp > fixed_minute:
+                    fixed_minute = minute_timestamp
+                    is_final = True
+
                 candle = {
                     "time": int(kline_data[0]),
                     "open": float(kline_data[1]),
@@ -62,7 +75,9 @@ async def get_kucoin_candles(symbol="BTC-USDT", interval="1min"):
                     "high": float(kline_data[3]),
                     "low": float(kline_data[4]),
                     "volume": float(kline_data[5]),
+                    "is_final": is_final,
                 }
+
                 yield candle
 
 
