@@ -9,6 +9,7 @@ dependencies = [
     "fastapi>=0.115.7",
     "ipykernel>=6.29.5",
     "matplotlib>=3.10.0",
+    "mplfinance>=0.12.10b0",
     "pandas>=2.2.3",
     "pip>=25.0",
     "python-dotenv>=1.0.1",
