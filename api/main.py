@@ -11,13 +11,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 
-from binance_api import (
+from core.brokers_api import (
     get_binance_candles,
     get_historical_klines,
     get_historical_klines_from_kucoin,
     get_kucoin_candles,
 )
-from strategiez.src_to_rafactor import (
+from core.strategiez.src_to_rafactor import (
     backtest_signals,
     calculate_indicator_signals,
     generate_signals,
@@ -300,8 +300,9 @@ html = (
         <ul id='messages'>
         </ul>
         <script>
-            var ws = new WebSocket("wss://"""
-    + "chart-api.chickenkiller.com"
+            var ws = new WebSocket("wss://"""  # This should be ws:// if you're running locally
+    # + "chart-api.chickenkiller.com"
+    "localhost:8080"
     + """/ws");
             ws.onmessage = function(event) {
                 var messages = document.getElementById('messages')
@@ -325,14 +326,27 @@ html = (
 
 @app.get("/")
 async def get():
+    """
+    Handle GET requests to the root URL.
+
+    Returns an HTML response containing a simple WebSocket chat page.
+    """
+    # Return the HTML content defined in the 'html' variable as an HTTP response
     return HTMLResponse(html)
 
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
+    """
+    Handle WebSocket messages.
+
+    This is a simple echo server that sends back the same message it received.
+    """
     await websocket.accept()
     while True:
+        # Wait for a message from the client
         data = await websocket.receive_text()
+        # Send the same message back to the client
         await websocket.send_text(f"Message text was: {data}")
 
 
