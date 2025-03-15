@@ -1,4 +1,5 @@
 [![Netlify Status](https://api.netlify.com/api/v1/badges/11b3c195-eb26-4035-bbee-3ed36bcc5601/deploy-status)](https://app.netlify.com/sites/astonishing-klepon-cbc7e9/deploys)
+
 # Formula Binance ATM
 
 Formula Binance ATM is a modular Python and TypeScript project that combines a trading signals backtesting engine, a FastAPI backend, and a Next.js-powered crypto charting interface. It also includes an advanced RSS reader with Windows service support for notifications. This project is designed to support heuristic signal generation, indicator calculation, and historical backtesting – all with an easy-to-deploy structure.
@@ -26,12 +27,25 @@ Formula Binance ATM is a modular Python and TypeScript project that combines a t
 
 ### Prerequisites
 
-- Python 3.13 or above ([`pyproject.toml`](pyproject.toml))
-- Node.js (v20 recommended for the frontend)
-- pip
+- ~~(probably only [`Docker Compose`](https://docs.docker.com/compose/))~~
 
-### Python Environment Setup
+- [`uv`](https://docs.astral.sh/uv/getting-started/installation/)
+- Node.js (v20 recommended for the frontend)
+
+### Running the FastAPI backend
 
 ```
 uv run -m fastapi run api/main.py
 ```
+
+
+### To Do's
+
+ - [ ] [Render](https://render.com/) badget.
+ - [ ] Create an automated CI/CD pipeline.
+ - [ ] `docker compose` for the dev environment on a single machine.
+ - [ ] `.dockerignore` is incomplete, still some unwanted files are lurking around
+ - [ ] Testing UI's (a NextJS app) `Dockerfile`
+ - [ ] Adds strategies from [Google Sheet](https://docs.google.com/spreadsheets/d/1AYfjHLJVAkbkMQVl1jFvv8SBf9AZV3Ohzh8oyI34KBk/edit?gid=1708701458#gid=1708701458)
+ - [ ] Add Apache Kafka service for proper message queueing and real-time analytics
+ - [ ] Add agents to create or/and analyze or/and drop strategies over time
