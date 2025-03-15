@@ -1,0 +1,14 @@
+.gitmodules 
+.github 
+.git
+.gitignore
+package-lock.json
+requirements.notebook.txt
+san.cnf
+
+
+# frontend
+ui/
+
+.gitlab-ci.yml
+

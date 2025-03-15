@@ -8,7 +8,7 @@ import requests
 import websockets
 from binance.spot import Spot
 from dotenv import load_dotenv
-from requests import Response
+from fastapi.responses import Response
 
 load_dotenv()
 # TODO: Separate API key and secret from the code

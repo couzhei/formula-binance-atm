@@ -1,6 +1,6 @@
 import pandas as pd
 
-from strategiez.indicators import calculate_sma
+from core.strategiez.indicators import calculate_sma
 
 
 def calculate_indicator_signals(
