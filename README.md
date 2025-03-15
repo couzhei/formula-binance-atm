@@ -49,3 +49,4 @@ uv run -m fastapi run api/main.py
  - [ ] Adds strategies from [Google Sheet](https://docs.google.com/spreadsheets/d/1AYfjHLJVAkbkMQVl1jFvv8SBf9AZV3Ohzh8oyI34KBk/edit?gid=1708701458#gid=1708701458)
  - [ ] Add Apache Kafka service for proper message queueing and real-time analytics
  - [ ] Add agents to create or/and analyze or/and drop strategies over time
+ - [ ] Migrate TA-lib from 0.6.3 to an updated version
