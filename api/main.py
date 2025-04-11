@@ -190,13 +190,14 @@ async def websocket_endpoint(
                 "time": candle["time"],
                 "open": candle["open"],
                 "high": candle["high"],
-                "low": candle["low"],
+                "low": candle["low"], 
                 "close": candle["close"],
                 "signal": (
                     "BUY"
                     if candle["is_final"] and candle["close"] > candle["open"]
                     else None
                 ),
+                "is_final": candle["is_final"]
             }
             await websocket.send_json(real_time_data)
     except WebSocketDisconnect:
@@ -219,7 +220,7 @@ async def websocket_kucoin_endpoint(
         # Don't be harsh on yourself, you're just starting, bro!
 
         # Get last 10 candles for SMA calculation
-        historical_df = get_historical_klines_from_kucoin(interval="1m", limit=50)
+        historical_df = get_historical_klines_from_kucoin(interval="1min", limit=50)
         historical_closes = historical_df["close"].tolist()
         historical_highs = historical_df["high"].iloc[-3:].tolist()
         historical_lows = historical_df["low"].iloc[-3:].tolist()
@@ -260,6 +261,7 @@ async def websocket_kucoin_endpoint(
                 "close": candle["close"],
                 "sma": current_sma,
                 "signal": signal,
+                 "is_final": candle["is_final"]
             }
             await websocket.send_json(real_time_data)
     except WebSocketDisconnect:

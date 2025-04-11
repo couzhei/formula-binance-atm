@@ -171,7 +171,7 @@ def get_historical_klines_from_kucoin(
     )
 
     # Convert timestamp from milliseconds to seconds
-    df["timestamp"] = df["timestamp"].astype(float)
+    df["timestamp"] = df["timestamp"].astype(int)
 
     # Convert OHLCV columns to float
     df[["open", "high", "low", "close", "volume"]] = df[

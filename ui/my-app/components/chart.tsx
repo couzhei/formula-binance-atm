@@ -1,3 +1,5 @@
+"use client";
+import type { ApiResponse, RealTimeData } from "@/lib/types";
 import {
   Time,
   CandlestickData,
@@ -10,42 +12,10 @@ import {
 } from "lightweight-charts";
 import { useEffect, useRef, useState } from "react";
 
-const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8001";
+const backendUrl =
+  process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8001";
 
-interface HistoricalData {
-  timestamp: number;
-  open: number;
-  high: number;
-  low: number;
-  close: number;
-  volume: number;
-  [key: string]: number | string | undefined;
-}
-
-interface Signal {
-  timestamp: number;
-  price: number;
-  type: "BUY" | "SELL";
-}
-
-interface ApiResponse {
-  historical_data: HistoricalData[];
-  signals: Signal[];
-  sma_param: number;
-}
-
-interface RealTimeData {
-  time: number;
-  open: number;
-  high: number;
-  low: number;
-  close: number;
-  sma: number | null;
-  signal?: "BUY" | "SELL" | null;
-  is_final?: boolean;
-}
-
-const ChartPage: React.FC = () => {
+export default function CandlestickChart() {
   const chartRef = useRef<HTMLDivElement>(null);
   const chart = useRef<IChartApi | null>(null);
   const candleSeries = useRef<ISeriesApi<"Candlestick"> | null>(null);
@@ -53,6 +23,7 @@ const ChartPage: React.FC = () => {
   const [data, setData] = useState<ApiResponse | null>(null);
   const smaData = useRef<LineData[]>([]);
   const pendingSma = useRef<LineData | null>(null);
+  console.log(data);
 
   useEffect(() => {
     fetch(`${backendUrl}/historical_data`)
@@ -60,14 +31,10 @@ const ChartPage: React.FC = () => {
       .then((apiData: ApiResponse) => {
         setData(apiData);
         const smaKey = `sma_${apiData.sma_param}`;
+
         const historicalSma = apiData.historical_data
           .map((item) => ({
-            time:
-              (
-                typeof item.timestamp === "string"
-                  ? parseInt(item.timestamp, 10)
-                  : item.timestamp
-              ) as unknown as Time,
+            time: Math.floor(item.timestamp) as Time,
             value: Number(item[smaKey]),
           }))
           .filter((point) => !isNaN(point.value));
@@ -99,15 +66,14 @@ const ChartPage: React.FC = () => {
 
     const candles: CandlestickData<Time>[] = data.historical_data.map(
       (item) => ({
-        time: (typeof item.timestamp === "string"
-          ? parseInt(item.timestamp, 10)
-          : item.timestamp) as unknown as Time,
+        time: Math.floor(item.timestamp) as Time,
         open: Number(item.open),
         high: Number(item.high),
         low: Number(item.low),
         close: Number(item.close),
       })
     );
+
     candleSeries.current.setData(candles);
     smaSeries.current.setData(smaData.current);
 
@@ -129,52 +95,59 @@ const ChartPage: React.FC = () => {
     const ws = new WebSocket(wsUrl);
 
     ws.onmessage = (e) => {
-      const realTimeData: RealTimeData = JSON.parse(e.data);
-      // Compute timestamp and convert to string for a proper Time format.
-      const timestamp = Math.floor(realTimeData.time);
-      const timeVal = timestamp.toString() as Time;
+      const {
+        time,
+        close,
+        open,
+        low,
+        high,
+        sma,
+        is_final,
+        signal,
+      }: RealTimeData = JSON.parse(e.data);
 
       candleSeries.current?.update({
-        time: timeVal,
-        open: realTimeData.open,
-        high: realTimeData.high,
-        low: realTimeData.low,
-        close: realTimeData.close,
+        time,
+        open,
+        high,
+        low,
+        close,
       });
 
-      if (realTimeData.sma !== null && !isNaN(realTimeData.sma)) {
-        if (realTimeData.is_final) {
+      if (sma !== null && !isNaN(sma)) {
+        if (is_final) {
           if (pendingSma.current) {
-            smaData.current = [...smaData.current, pendingSma.current];
             pendingSma.current = null;
           }
           const newPoint = {
-            time: timeVal,
-            value: realTimeData.sma,
+            time,
+            value: Number(sma),
           };
-          smaData.current = [...smaData.current, newPoint];
           if (smaData.current.length > data.sma_param) {
             smaData.current.shift();
           }
-          smaSeries.current?.setData(smaData.current);
+          try {
+            smaSeries.current!.update(newPoint);
+          } catch (e) {
+            console.log(e);
+          }
         } else {
           pendingSma.current = {
-            time: timeVal,
-            value: realTimeData.sma,
+            time,
+            value: sma,
           };
         }
       }
 
-      if (realTimeData.signal) {
+      if (signal) {
         const markers = candleSeries.current?.markers() || [];
         // Use timeVal for marker's time
         markers.push({
-          time: timeVal,
-          position: realTimeData.signal === "BUY" ? "belowBar" : "aboveBar",
-          color: realTimeData.signal === "BUY" ? "#00ff00" : "#ff0000",
-          shape:
-            realTimeData.signal === "BUY" ? "arrowUp" : "arrowDown",
-          text: realTimeData.signal,
+          time,
+          position: signal === "BUY" ? "belowBar" : "aboveBar",
+          color: signal === "BUY" ? "#00ff00" : "#ff0000",
+          shape: signal === "BUY" ? "arrowUp" : "arrowDown",
+          text: signal,
         });
         candleSeries.current?.setMarkers(markers);
       }
@@ -187,6 +160,4 @@ const ChartPage: React.FC = () => {
   }, [data]);
 
   return <div ref={chartRef} />;
-};
-
-export default ChartPage;
+}
