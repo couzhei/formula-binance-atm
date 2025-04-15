@@ -1,5 +1,5 @@
 "use client";
-import type { ApiResponse, RealTimeData } from "@/lib/types";
+import type { ApiResponse, RealTimeData } from "../lib/types";
 import {
   Time,
   CandlestickData,
