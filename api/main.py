@@ -220,12 +220,13 @@ async def websocket_kucoin_endpoint(
         # Don't be harsh on yourself, you're just starting, bro!
 
         # Get last 10 candles for SMA calculation
-        historical_df = get_historical_klines_from_kucoin(interval="1min", limit=50)
+        sma_param = settings.sma_window
+        historical_df = get_historical_klines_from_kucoin(interval="1min", limit=sma_param + 1)
         historical_closes = historical_df["close"].tolist()
         historical_highs = historical_df["high"].iloc[-3:].tolist()
         historical_lows = historical_df["low"].iloc[-3:].tolist()
         current_sma = (
-            sum(historical_closes) / len(historical_closes)
+            sum(historical_closes[-sma_param:]) / sma_param
             if historical_closes
             else None
         )

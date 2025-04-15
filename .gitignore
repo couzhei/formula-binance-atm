@@ -100,7 +100,7 @@ venv.bak/
 # Talib library files
 ta-lib*
 
-# notebooks for now
-*.ipynb
+# synthetic data files
+synthetic_*.csv
 
 Two\ Layouts.md
