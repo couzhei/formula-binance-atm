@@ -107,7 +107,7 @@ export default function CandlestickChart() {
       }: RealTimeData = JSON.parse(e.data);
 
       candleSeries.current?.update({
-        time,
+        time: time as Time,
         open,
         high,
         low,
@@ -120,7 +120,7 @@ export default function CandlestickChart() {
             pendingSma.current = null;
           }
           const newPoint = {
-            time,
+            time: time as Time,
             value: Number(sma),
           };
           if (smaData.current.length > data.sma_param) {
@@ -133,7 +133,7 @@ export default function CandlestickChart() {
           }
         } else {
           pendingSma.current = {
-            time,
+            time: time as Time,
             value: sma,
           };
         }
@@ -143,7 +143,7 @@ export default function CandlestickChart() {
         const markers = candleSeries.current?.markers() || [];
         // Use timeVal for marker's time
         markers.push({
-          time,
+          time: time as Time,
           position: signal === "BUY" ? "belowBar" : "aboveBar",
           color: signal === "BUY" ? "#00ff00" : "#ff0000",
           shape: signal === "BUY" ? "arrowUp" : "arrowDown",
