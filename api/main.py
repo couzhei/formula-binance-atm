@@ -60,15 +60,19 @@ class BacktestRequest(BaseModel):
     initial_balance: float = 10000.0
 
 
+class Strategy(BaseModel):
+    indicator: str = Field(..., example="SMA")
+    params: dict = Field(..., example={"window": 21})
+    side: str = Field(..., example="LONG")
+
 # Define your settings model
 class Settings(BaseModel):
     symbol: str = Field(..., example="BTC-USDT")
     interval: str = Field(..., example="1min")
     limit: int = Field(..., example=1000)
-    strategies: List[str] = Field(..., example=["smacrossprice"])
-    sma_window: int = Field(..., example=21)
-    side: str = Field(..., example="LONG")
     api: str = Field(..., example="kucoin")
+    strategies: List[Strategy] = Field(..., examples=[{"indicator": "SMA", "params": {"window": 21}, "side": "BOTH"}])
+    
 
 
 # Initialize settings in app.state on startup
