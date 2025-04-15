@@ -3,6 +3,7 @@ import os
 from datetime import datetime
 from random import uniform
 from typing import List
+from collections import deque
 
 import pandas as pd
 from dotenv import load_dotenv
@@ -129,7 +130,7 @@ def get_historical_data(settings: Settings = Depends(get_settings)):
             df, "RSI", {"length": 14}, detect_divergence=True
         )
         if settings.strategies:
-            # TODO: This should get outside of here not in the "views"
+            # TODO: This should get outside of here - not in the "views" or "routers"
             # for strategy in settings.strategies:
             #     if strategy == "smacrossprice":
             #         df, sma_signals = calculate_indicator_signals(
@@ -230,6 +231,7 @@ async def websocket_kucoin_endpoint(
             if historical_closes
             else None
         )
+        queue = deque(maxlen=4)
         async for candle in get_kucoin_candles(
             symbol=settings.symbol,
             interval=settings.interval,
@@ -237,6 +239,7 @@ async def websocket_kucoin_endpoint(
             is_final = candle["is_final"]
             signal = None
             if is_final:
+                queue.append(candle)
                 historical_closes.append(candle["close"])
                 historical_highs.append(candle["high"])
                 historical_lows.append(candle["low"])
