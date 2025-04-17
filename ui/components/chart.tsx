@@ -158,8 +158,10 @@ export default function CandlestickChart() {
 
       // Candle + SMA
       candleSeries.current?.update({ time: t, open: msg.open, high: msg.high, low: msg.low, close: msg.close });
-      if (msg.is_final && msg.sma != null) {
+      if (msg.is_final && msg.sma != null) { // TODO: should later be separated since someone might not be interested in seeing sma or rsi
         smaSeries.current?.update({ time: t, value: Number(msg.sma) });
+        lvl30?.update({ time: t, value: 30 });
+        lvl70?.update({ time: t, value: 70 });
       }
 
       // New MACD + RSI
