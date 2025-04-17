@@ -2,192 +2,206 @@
 import type { ApiResponse, RealTimeData } from "../types/types";
 import {
   Time,
-  CandlestickData,
+  CandlestickData, // used for typing candles array
   LineStyle,
   LineSeries,
+  HistogramSeries,
   CandlestickSeries,
   createChart,
   IChartApi,
   ISeriesApi,
+  ISeriesMarkersPluginApi,
   SeriesMarker,
   LineData,
   createSeriesMarkers,
+  HistogramData,
+  LogicalRange,
+  IRange,
 } from "lightweight-charts";
-// import {} from "lightweight-charts/plugins";
 import { useEffect, useRef, useState } from "react";
 
+// --------------------------------------------------------------------------------
+// Constants and Helper Functions
+// --------------------------------------------------------------------------------
 const backendUrl =
   process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8001";
 
+function generateMacdData(times: Time[]): HistogramData<Time>[] {
+  let value = 0;
+  return times.map((time, i) => {
+    const prevValue = value;
+    value += (Math.random() - 0.5) * 0.5;
+    let color = "#888";
+    if (i > 0) {
+      if (value > 0) {
+        color = value > prevValue ? "#00ff00" : "#007700";
+      } else {
+        color = value < prevValue ? "#ff0000" : "#770000";
+      }
+    }
+    return { time, value: Math.round(value * 100) / 100, color };
+  });
+}
+
+function generateRsiData(times: Time[]): LineData<Time>[] {
+  return times.map((time, i) => ({
+    time,
+    value: 30 + Math.random() * 40 + 10 * Math.sin(i / 10),
+  }));
+}
+
+type MarkerRef = ISeriesMarkersPluginApi<Time>;
+
 export default function CandlestickChart() {
-  const chartRef = useRef<HTMLDivElement>(null);
-  const chart = useRef<IChartApi | null>(null);
-  const candleSeries = useRef<ISeriesApi<"Candlestick"> | null>(null);
-  const smaSeries = useRef<ISeriesApi<"Line"> | null>(null);
+  // Refs
+  const mainChartRef = useRef<HTMLDivElement>(null);
+  const macdChartRef = useRef<HTMLDivElement>(null);
+  const rsiChartRef = useRef<HTMLDivElement>(null);
+
+  const mainChart = useRef<IChartApi | null>(null);
+  const macdChart = useRef<IChartApi | null>(null);
+  const rsiChart = useRef<IChartApi | null>(null);
+
+  const candleSeries = useRef<ISeriesApi<'Candlestick'> | null>(null);
+  const smaSeries = useRef<ISeriesApi<'Line'> | null>(null);
+  const macdSeries = useRef<ISeriesApi<'Histogram'> | null>(null);
+  const rsiSeries = useRef<ISeriesApi<'Line'> | null>(null);
+  const markersRef = useRef<MarkerRef | null>(null);
+
   const [data, setData] = useState<ApiResponse | null>(null);
   const smaData = useRef<LineData[]>([]);
-  const pendingSma = useRef<LineData | null>(null);
-  const seriesMarkersRef = useRef<any>(null); // for referencing to markers on the chart
-  // console.log(data);  // To peep into the incoming data
+  const macdData = useRef<HistogramData<Time>[]>([]);
+  const rsiData = useRef<LineData<Time>[]>([]);
 
   useEffect(() => {
     fetch(`${backendUrl}/historical_data`)
       .then((res) => res.json())
       .then((apiData: ApiResponse) => {
         setData(apiData);
-        const smaKey = `sma_${apiData.sma_param}`;
-
-        const historicalSma = apiData.historical_data
-          .map((item) => ({
-            time: Math.floor(item.timestamp) as Time,
-            value: Number(item[smaKey]),
-          }))
-          .filter((point) => !isNaN(point.value));
-        smaData.current = historicalSma;
+        const key = `sma_${apiData.sma_param}`;
+        smaData.current = apiData.historical_data
+          .map((d) => ({ time: Math.floor(d.timestamp) as Time, value: Number(d[key]) }))
+          .filter((p) => !isNaN(p.value));
+        const times = apiData.historical_data.map((d) => Math.floor(d.timestamp) as Time);
+        macdData.current = generateMacdData(times);
+        rsiData.current = generateRsiData(times);
       });
   }, []);
 
   useEffect(() => {
-    if (!chartRef.current || !data) return;
+    if (!data || !mainChartRef.current || !macdChartRef.current || !rsiChartRef.current) return;
 
-    chart.current = createChart(chartRef.current, {
-      width: 800,
-      height: 600,
-      layout: { background: { color: "#fff" }, textColor: "#333" },
-      grid: { vertLines: { color: "#eee" }, horzLines: { color: "#eee" } },
-      timeScale: {
-        timeVisible: true,
-        tickMarkFormatter: (time: number) =>
-          new Date(time * 1000).toLocaleTimeString(),
-      },
-    });
+    // Main Chart
+    mainChart.current = createChart(mainChartRef.current, { width: 800, height: 400 });
+    candleSeries.current = mainChart.current.addSeries(CandlestickSeries);
+    smaSeries.current = mainChart.current.addSeries(LineSeries, { color: '#1b2781', lineStyle: LineStyle.Dashed });
 
-    candleSeries.current = chart.current.addSeries(CandlestickSeries);
-    smaSeries.current = chart.current.addSeries(LineSeries, {
-      color: "#1b2781",
-      lineWidth: 2,
-      lineStyle: LineStyle.Dashed,
-    });
-
-    const candles: CandlestickData<Time>[] = data.historical_data.map(
-      (item) => ({
-        time: Math.floor(item.timestamp) as Time,
-        open: Number(item.open),
-        high: Number(item.high),
-        low: Number(item.low),
-        close: Number(item.close),
-      })
-    );
-
+    // Use CandlestickData<> for proper typing
+    const candles: CandlestickData<Time>[] = data.historical_data.map((d) => ({
+      time: Math.floor(d.timestamp) as Time,
+      open: Number(d.open),
+      high: Number(d.high),
+      low: Number(d.low),
+      close: Number(d.close),
+    }));
     candleSeries.current.setData(candles);
     smaSeries.current.setData(smaData.current);
 
-    // NEW: Set initial markers from backend signals, if any.
-    if (data.signals && data.signals.length > 0) {
-      const markers: SeriesMarker<Time>[] = data.signals.map((signal) => ({
-        time: signal.timestamp as unknown as Time,
-        position: signal.type === "BUY" ? "belowBar" : "aboveBar",
-        color: signal.type === "BUY" ? "#00ff00" : "#ff0000",
-        shape: signal.type === "BUY" ? "arrowUp" : "arrowDown",
-        text: signal.type,
+    // MACD Chart
+    macdChart.current = createChart(macdChartRef.current, { width: 800, height: 150 });
+    macdSeries.current = macdChart.current.addSeries(HistogramSeries);
+    macdSeries.current.setData(macdData.current);
+
+    // RSI Chart
+    rsiChart.current = createChart(rsiChartRef.current, { width: 800, height: 150 });
+    rsiSeries.current = rsiChart.current.addSeries(LineSeries);
+    rsiSeries.current.setData(rsiData.current);
+
+    // Add vertical lines at 30 & 70
+    const lvl30 = rsiChart.current.addSeries(LineSeries, { lineStyle: LineStyle.Dotted });
+    const lvl70 = rsiChart.current.addSeries(LineSeries, { lineStyle: LineStyle.Dotted });
+    lvl30.setData(rsiData.current.map((p) => ({ time: p.time, value: 30 })));
+    lvl70.setData(rsiData.current.map((p) => ({ time: p.time, value: 70 })));
+
+    // Sync time scales
+    const charts = [mainChart.current, macdChart.current, rsiChart.current] as IChartApi[];
+    charts.forEach((src) => {
+      src.timeScale().subscribeVisibleLogicalRangeChange((range: LogicalRange | null) => {
+        if (!range) return;
+        charts
+          .filter((c) => c !== src)
+          .forEach((c) => c.timeScale().setVisibleLogicalRange(range as IRange<number>));
+      });
+    });
+
+    // Markers
+    if (data.signals?.length) {
+      const ms: SeriesMarker<Time>[] = data.signals.map((s) => ({
+        time: s.timestamp as Time,
+        position: s.type === 'BUY' ? 'belowBar' : 'aboveBar',
+        color: s.type === 'BUY' ? '#00ff00' : '#ff0000',
+        shape: s.type === 'BUY' ? 'arrowUp' : 'arrowDown',
+        text: s.type,
       }));
-
-      // candleSeries.current.setMarkers(markers); // ❌ v4 only
-
-      // const seriesMarkers = createSeriesMarkers(candleSeries.current, markers); before
-
-      seriesMarkersRef.current = createSeriesMarkers(
-        candleSeries.current,
-        markers
-      );
+      markersRef.current = createSeriesMarkers(candleSeries.current!, ms);
     } else {
-      // If no initial markers, still create the primitive for later use
-      seriesMarkersRef.current = createSeriesMarkers(candleSeries.current, []);
+      markersRef.current = createSeriesMarkers(candleSeries.current!, []);
     }
 
-    const wsProtocol = backendUrl.startsWith("https") ? "wss://" : "ws://";
-    const wsUrl =
-      wsProtocol + backendUrl.replace(/https?:\/\//, "") + "/ws/kucoin";
-    const ws = new WebSocket(wsUrl);
-
+    // WebSocket updates
+    const ws = new WebSocket(
+      `${backendUrl.startsWith('https') ? 'wss' : 'ws'}://${backendUrl.replace(/^https?:\/\//, '')}/ws/kucoin`
+    );
     ws.onmessage = (e) => {
-      const {
-        time,
-        close,
-        open,
-        low,
-        high,
-        sma,
-        is_final,
-        signal,
-      }: RealTimeData = JSON.parse(e.data);
+      const msg: RealTimeData = JSON.parse(e.data);
+      const t = msg.time as Time;
 
-      candleSeries.current?.update({
-        time: time as Time,
-        open,
-        high,
-        low,
-        close,
-      });
-
-      if (sma !== null && !isNaN(sma)) {
-        if (is_final) {
-          if (pendingSma.current) {
-            pendingSma.current = null;
-          }
-          const newPoint = {
-            time: time as Time,
-            value: Number(sma),
-          };
-          if (smaData.current.length > data.sma_param) {
-            smaData.current.shift();
-          }
-          try {
-            smaSeries.current!.update(newPoint);
-          } catch (e) {
-            console.log(e);
-          }
-        } else {
-          pendingSma.current = {
-            time: time as Time,
-            value: sma,
-          };
-        }
+      // Candle + SMA
+      candleSeries.current?.update({ time: t, open: msg.open, high: msg.high, low: msg.low, close: msg.close });
+      if (msg.is_final && msg.sma != null) {
+        smaSeries.current?.update({ time: t, value: Number(msg.sma) });
       }
 
-      if (signal && seriesMarkersRef.current) {
-        // const markers = candleSeries.current?.markers() || []; //v4
+      // New MACD + RSI
+      const prevM = macdData.current[macdData.current.length - 1]?.value ?? 0;
+      const newMVal = prevM + (Math.random() - 0.5) * 0.5;
+      const newM: HistogramData<Time> = {
+        time: t,
+        value: Math.round(newMVal * 100) / 100,
+        color: newMVal > 0 ? (newMVal > prevM ? '#00ff00' : '#007700') : (newMVal < prevM ? '#ff0000' : '#770000'),
+      };
+      macdData.current.push(newM);
+      macdSeries.current?.update(newM);
 
-        // Get current markers
-        const currentMarkers = seriesMarkersRef.current.markers();
-        // Use timeVal for marker's time
-        // markers.push({
-        //   time: time as Time,
-        //   position: signal === "BUY" ? "belowBar" : "aboveBar",
-        //   color: signal === "BUY" ? "#00ff00" : "#ff0000",
-        //   shape: signal === "BUY" ? "arrowUp" : "arrowDown",
-        //   text: signal,
-        // }); // v4
+      const newRVal = 30 + Math.random() * 40 + 10 * Math.sin(macdData.current.length / 10);
+      const newR: LineData<Time> = { time: t, value: Math.round(newRVal * 100) / 100 };
+      rsiData.current.push(newR);
+      rsiSeries.current?.update(newR);
 
-        // Add the new marker // v5
-        const newMarker = {
-          time: time as Time,
-          position: signal === "BUY" ? "belowBar" : "aboveBar",
-          color: signal === "BUY" ? "#00ff00" : "#ff0000",
-          shape: signal === "BUY" ? "arrowUp" : "arrowDown",
-          text: signal,
+      // markers
+      if (msg.signal && markersRef.current) {
+        const curr = markersRef.current.markers();
+        const nm: SeriesMarker<Time> = {
+          time: t,
+          position: msg.signal === 'BUY' ? 'belowBar' : 'aboveBar',
+          color: msg.signal === 'BUY' ? '#00ff00' : '#ff0000',
+          shape: msg.signal === 'BUY' ? 'arrowUp' : 'arrowDown',
+          text: msg.signal,
         };
-        // candleSeries.current?.setMarkers(markers);
-        // Update the markers array
-        seriesMarkersRef.current.setMarkers([...currentMarkers, newMarker]);
+        markersRef.current.setMarkers([...curr, nm]);
       }
     };
-
     return () => {
       ws.close();
-      chart.current?.remove();
+      charts.forEach((c) => c.remove());
     };
   }, [data]);
 
-  return <div ref={chartRef} />;
+  return (
+    <>
+      <div ref={mainChartRef} />
+      <div ref={macdChartRef} style={{ marginTop: 8 }} />
+      <div ref={rsiChartRef} style={{ marginTop: 8 }} />
+    </>
+  );
 }
