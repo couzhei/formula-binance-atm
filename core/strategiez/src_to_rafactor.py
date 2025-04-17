@@ -109,7 +109,7 @@ def generate_signals(
     #         ):
     #             signal = "SELL"
 
-    sma_window = settings.sma_window if settings else 50
+    sma_window = settings.strategies[0].params["window"] if settings else 50
     df["sma"] = calculate_sma(df, sma_window)
 
     # Main condition: current high above sma and low below sma
