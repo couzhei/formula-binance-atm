@@ -9,7 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
-    "lightweight-charts": "^4.2.2",
+    "lightweight-charts": "^5.0.5",
     "next": "15.3.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"

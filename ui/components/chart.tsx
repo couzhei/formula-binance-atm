@@ -4,12 +4,16 @@ import {
   Time,
   CandlestickData,
   LineStyle,
+  LineSeries,
+  CandlestickSeries,
   createChart,
   IChartApi,
   ISeriesApi,
   SeriesMarker,
   LineData,
+  createSeriesMarkers,
 } from "lightweight-charts";
+// import {} from "lightweight-charts/plugins";
 import { useEffect, useRef, useState } from "react";
 
 const backendUrl =
@@ -23,7 +27,8 @@ export default function CandlestickChart() {
   const [data, setData] = useState<ApiResponse | null>(null);
   const smaData = useRef<LineData[]>([]);
   const pendingSma = useRef<LineData | null>(null);
-  console.log(data);
+  const seriesMarkersRef = useRef<any>(null); // for referencing to markers on the chart
+  // console.log(data);  // To peep into the incoming data
 
   useEffect(() => {
     fetch(`${backendUrl}/historical_data`)
@@ -57,8 +62,8 @@ export default function CandlestickChart() {
       },
     });
 
-    candleSeries.current = chart.current.addCandlestickSeries();
-    smaSeries.current = chart.current.addLineSeries({
+    candleSeries.current = chart.current.addSeries(CandlestickSeries);
+    smaSeries.current = chart.current.addSeries(LineSeries, {
       color: "#1b2781",
       lineWidth: 2,
       lineStyle: LineStyle.Dashed,
@@ -86,7 +91,18 @@ export default function CandlestickChart() {
         shape: signal.type === "BUY" ? "arrowUp" : "arrowDown",
         text: signal.type,
       }));
-      candleSeries.current.setMarkers(markers);
+
+      // candleSeries.current.setMarkers(markers); // ❌ v4 only
+
+      // const seriesMarkers = createSeriesMarkers(candleSeries.current, markers); before
+
+      seriesMarkersRef.current = createSeriesMarkers(
+        candleSeries.current,
+        markers
+      );
+    } else {
+      // If no initial markers, still create the primitive for later use
+      seriesMarkersRef.current = createSeriesMarkers(candleSeries.current, []);
     }
 
     const wsProtocol = backendUrl.startsWith("https") ? "wss://" : "ws://";
@@ -139,17 +155,31 @@ export default function CandlestickChart() {
         }
       }
 
-      if (signal) {
-        const markers = candleSeries.current?.markers() || [];
+      if (signal && seriesMarkersRef.current) {
+        // const markers = candleSeries.current?.markers() || []; //v4
+
+        // Get current markers
+        const currentMarkers = seriesMarkersRef.current.markers();
         // Use timeVal for marker's time
-        markers.push({
+        // markers.push({
+        //   time: time as Time,
+        //   position: signal === "BUY" ? "belowBar" : "aboveBar",
+        //   color: signal === "BUY" ? "#00ff00" : "#ff0000",
+        //   shape: signal === "BUY" ? "arrowUp" : "arrowDown",
+        //   text: signal,
+        // }); // v4
+
+        // Add the new marker // v5
+        const newMarker = {
           time: time as Time,
           position: signal === "BUY" ? "belowBar" : "aboveBar",
           color: signal === "BUY" ? "#00ff00" : "#ff0000",
           shape: signal === "BUY" ? "arrowUp" : "arrowDown",
           text: signal,
-        });
-        candleSeries.current?.setMarkers(markers);
+        };
+        // candleSeries.current?.setMarkers(markers);
+        // Update the markers array
+        seriesMarkersRef.current.setMarkers([...currentMarkers, newMarker]);
       }
     };
 
