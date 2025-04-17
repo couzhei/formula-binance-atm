@@ -62,8 +62,10 @@ class BacktestRequest(BaseModel):
 
 class Strategy(BaseModel):
     indicator: str = Field(..., example="SMA")
+    operator: str = Field(..., example="smacrossprice")
     params: dict = Field(..., example={"window": 21})
     side: str = Field(..., example="LONG")
+
 
 # Define your settings model
 class Settings(BaseModel):
@@ -71,8 +73,16 @@ class Settings(BaseModel):
     interval: str = Field(..., example="1min")
     limit: int = Field(..., example=1000)
     api: str = Field(..., example="kucoin")
-    strategies: List[Strategy] = Field(..., examples=[{"indicator": "SMA", "params": {"window": 21}, "side": "BOTH"}])
-    
+    strategies: List[Strategy] = Field(
+        ..., examples=[{
+                "indicator": "SMA",
+                "operator": "smacrossprice",
+                "side": "BOTH",
+                "params": {
+                    "window": 21,
+                },
+            }]
+    )
 
 
 # Initialize settings in app.state on startup
@@ -84,12 +94,15 @@ def startup_event():
         interval="1min",
         limit=1000,
         strategies=[
-            "smacrossprice",
-            # "rsi",
-            # "macd",
+            {
+                "indicator": "SMA",
+                "operator": "smacrossprice",
+                "side": "LONG",
+                "params": {
+                    "window": 21,
+                },
+            }  # TODO: This should be a list"
         ],
-        sma_window=21,  # TODO: This should be a list
-        side="LONG",
         api="kucoin",
     )
 
@@ -138,12 +151,12 @@ def get_historical_data(settings: Settings = Depends(get_settings)):
             # for strategy in settings.strategies:
             #     if strategy == "smacrossprice":
             #         df, sma_signals = calculate_indicator_signals(
-            #             df, "SMA", {"period": settings.sma_window}, detect_divergence=True
+            #             df, "SMA", {"period": settings.strategies[0].params["window"]}, detect_divergence=True
             #         )
             signals = generate_signals(df, settings)
 
         # TODO: Harcoded SMA Parameter and calculation
-        sma_window = settings.sma_window
+        sma_window = settings.strategies[0].params["window"]
         df[f"sma_{sma_window}"] = df.close.rolling(window=sma_window).mean()
 
         df = (
@@ -195,14 +208,14 @@ async def websocket_endpoint(
                 "time": candle["time"],
                 "open": candle["open"],
                 "high": candle["high"],
-                "low": candle["low"], 
+                "low": candle["low"],
                 "close": candle["close"],
                 "signal": (
                     "BUY"
                     if candle["is_final"] and candle["close"] > candle["open"]
                     else None
                 ),
-                "is_final": candle["is_final"]
+                "is_final": candle["is_final"],
             }
             await websocket.send_json(real_time_data)
     except WebSocketDisconnect:
@@ -225,8 +238,10 @@ async def websocket_kucoin_endpoint(
         # Don't be harsh on yourself, you're just starting, bro!
 
         # Get last 10 candles for SMA calculation
-        sma_param = settings.sma_window
-        historical_df = get_historical_klines_from_kucoin(interval="1min", limit=sma_param + 1)
+        sma_param = settings.strategies[0].params["window"]
+        historical_df = get_historical_klines_from_kucoin(
+            interval="1min", limit=sma_param + 1
+        )
         historical_closes = historical_df["close"].tolist()
         historical_highs = historical_df["high"].iloc[-3:].tolist()
         historical_lows = historical_df["low"].iloc[-3:].tolist()
@@ -269,7 +284,7 @@ async def websocket_kucoin_endpoint(
                 "close": candle["close"],
                 "sma": current_sma,
                 "signal": signal,
-                 "is_final": candle["is_final"]
+                "is_final": candle["is_final"],
             }
             await websocket.send_json(real_time_data)
     except WebSocketDisconnect:
