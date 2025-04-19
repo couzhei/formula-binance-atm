@@ -5,6 +5,8 @@ export interface HistoricalData {
   low: number;
   close: number;
   volume: number;
+  MACD_hist: number;
+  RSI: number;
   [key: string]: number | string | undefined;
 }
 
