@@ -26,29 +26,6 @@ import { useEffect, useRef, useState } from "react";
 const backendUrl =
   process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8001";
 
-function generateMacdData(times: Time[]): HistogramData<Time>[] {
-  let value = 0;
-  return times.map((time, i) => {
-    const prevValue = value;
-    value += (Math.random() - 0.5) * 0.5;
-    let color = "#888";
-    if (i > 0) {
-      if (value > 0) {
-        color = value > prevValue ? "#00ff00" : "#007700";
-      } else {
-        color = value < prevValue ? "#ff0000" : "#770000";
-      }
-    }
-    return { time, value: Math.round(value * 100) / 100, color };
-  });
-}
-
-function generateRsiData(times: Time[]): LineData<Time>[] {
-  return times.map((time, i) => ({
-    time,
-    value: 30 + Math.random() * 40 + 10 * Math.sin(i / 10),
-  }));
-}
 
 type MarkerRef = ISeriesMarkersPluginApi<Time>;
 
@@ -85,11 +62,7 @@ export default function CandlestickChart() {
             value: Number(d[key]),
           }))
           .filter((p) => !isNaN(p.value));
-        const times = apiData.historical_data.map(
-          (d) => Math.floor(d.timestamp) as Time
-        );
-        // macdData.current = generateMacdData(times);
-        // rsiData.current = generateRsiData(times);
+
         macdData.current = apiData.historical_data
           .map((d, i, arr) => {
             const value = Number(d.MACD_hist);
